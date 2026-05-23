@@ -129,11 +129,31 @@ func _add_label(parent: Node, text: String, size: int = 22, color: Color = Color
 	parent.add_child(label)
 	return label
 
+func _add_label_nowrap(parent: Node, text: String, size: int = 22, color: Color = Color.WHITE, min_width: float = 0.0) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	if min_width > 0.0:
+		label.custom_minimum_size = Vector2(min_width, 0)
+	parent.add_child(label)
+	return label
+
 func _add_button(parent: Node, text: String, callback: Callable, min_size: Vector2 = Vector2(220, 52)) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = min_size
-	b.add_theme_font_size_override("font_size", 22)
+	var font_size := 22
+	if min_size.y <= 32:
+		font_size = 15
+	elif min_size.y <= 40:
+		font_size = 17
+	elif min_size.y <= 46:
+		font_size = 19
+	b.add_theme_font_size_override("font_size", font_size)
 	b.pressed.connect(callback)
 	parent.add_child(b)
 	return b
@@ -430,7 +450,7 @@ func _preview_for(card_id: String) -> String:
 # -----------------------------------------------------------------------------
 func show_battle() -> void:
 	_clear()
-	_add_background("res://assets/images/battle_mockup.png", 0.48)
+	_add_background("res://assets/images/battle_mockup.png", 0.56)
 	_build_top_hud()
 	_build_left_status_column()
 	_build_enemy_panel()
@@ -440,7 +460,7 @@ func show_battle() -> void:
 	_build_log_panel()
 
 func _build_top_hud() -> void:
-	var top := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	var top := _make_panel(Color(0.015, 0.025, 0.03, 0.88))
 	_set_box(top, 24, 16, 1256, 72)
 	add_child(top)
 	var row := HBoxContainer.new()
@@ -449,11 +469,11 @@ func _build_top_hud() -> void:
 	row.offset_top = 8
 	row.offset_right = -18
 	row.offset_bottom = -8
-	row.add_theme_constant_override("separation", 14)
+	row.add_theme_constant_override("separation", 16)
 	top.add_child(row)
-	_add_label(row, "第%d戦" % [battle_index + 1], 24, gold)
-	_add_label(row, "ターン %d" % turn, 22, Color(0.92, 0.88, 0.72))
-	_add_label(row, "山札 %d / 捨札 %d / デッキ %d" % [draw_pile.size(), discard_pile.size(), run_deck.size()], 18, Color(0.82, 0.82, 0.74))
+	_add_label_nowrap(row, "第%d戦" % [battle_index + 1], 24, gold, 84)
+	_add_label_nowrap(row, "ターン %d" % turn, 22, Color(0.92, 0.88, 0.72), 110)
+	_add_label_nowrap(row, "山札 %d / 捨札 %d / デッキ %d" % [draw_pile.size(), discard_pile.size(), run_deck.size()], 18, Color(0.82, 0.82, 0.74), 300)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
@@ -511,7 +531,7 @@ func _build_enemy_panel() -> void:
 	_add_label(enemy_box, "攻撃：%d" % int(enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
 
 func _build_battle_center() -> void:
-	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.56))
+	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.70))
 	_set_box(panel, 335, 92, 885, 382)
 	add_child(panel)
 	var box := VBoxContainer.new()
@@ -522,31 +542,34 @@ func _build_battle_center() -> void:
 	box.offset_bottom = -14
 	box.add_theme_constant_override("separation", 8)
 	panel.add_child(box)
-	_add_label(box, "実験場：押す方向 → 壁", 20, gold)
+	_add_label_nowrap(box, "実験場：押す方向 → 壁", 20, gold, 420)
 	var arena := HBoxContainer.new()
 	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	arena.alignment = BoxContainer.ALIGNMENT_CENTER
 	arena.add_theme_constant_override("separation", 18)
 	box.add_child(arena)
-	var enemy_card := _make_panel(Color(0.93, 0.95, 0.94, 0.92))
-	enemy_card.custom_minimum_size = Vector2(190, 180)
-	arena.add_child(enemy_card)
+
+	var enemy_token := _make_panel(Color(0.08, 0.19, 0.20, 0.88))
+	enemy_token.custom_minimum_size = Vector2(180, 150)
+	arena.add_child(enemy_token)
 	var enemy_box := VBoxContainer.new()
 	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	enemy_box.offset_left = 8
-	enemy_box.offset_top = 8
-	enemy_box.offset_right = -8
-	enemy_box.offset_bottom = -8
-	enemy_card.add_child(enemy_box)
-	var img := String(enemy.get("image", ""))
-	_add_texture(enemy_box, img, Vector2(165, 130))
-	_add_label(enemy_box, enemy.get("name", "敵"), 15, dark_ink)
+	enemy_box.offset_left = 12
+	enemy_box.offset_top = 10
+	enemy_box.offset_right = -12
+	enemy_box.offset_bottom = -10
+	enemy_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	enemy_box.add_theme_constant_override("separation", 2)
+	enemy_token.add_child(enemy_box)
+	_add_label_nowrap(enemy_box, enemy.get("name", "敵"), 17, gold, 150)
+	_add_label_nowrap(enemy_box, _enemy_token_icon(), 48, Color(0.55, 0.95, 0.95), 100)
+	_add_label_nowrap(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 15, Color(0.92, 0.92, 0.86), 130)
 	_add_label(arena, "→", 48, Color(0.95, 0.90, 0.70))
 	var spaces := HBoxContainer.new()
 	spaces.add_theme_constant_override("separation", 6)
 	arena.add_child(spaces)
 	for i in range(initial_wall_distance):
-		var cell := _make_panel(Color(0.05, 0.08, 0.08, 0.66))
+		var cell := _make_panel(Color(0.05, 0.08, 0.08, 0.74))
 		cell.custom_minimum_size = Vector2(34, 90)
 		spaces.add_child(cell)
 		var cell_box := CenterContainer.new()
@@ -555,15 +578,29 @@ func _build_battle_center() -> void:
 		var symbol := "□"
 		if i >= wall_distance:
 			symbol = "×"
-		_add_label(cell_box, symbol, 22, Color(0.95, 0.90, 0.70))
-	_add_label(arena, "壁", 30, gold)
+		_add_label_nowrap(cell_box, symbol, 22, Color(0.95, 0.90, 0.70), 20)
+	_add_label_nowrap(arena, "壁", 30, gold, 54)
+
+func _enemy_token_icon() -> String:
+	var enemy_id := String(enemy.get("id", ""))
+	match enemy_id:
+		"puyo":
+			return "●"
+		"oily_slime":
+			return "◉"
+		"goblin":
+			return "◆"
+		"graph_golem":
+			return "▣"
+		_:
+			return "●"
 
 func _build_enemy_visual() -> void:
 	_build_battle_center()
 
 func _build_preview_panel() -> void:
-	var preview := _make_panel(Color(0.015, 0.025, 0.03, 0.90))
-	_set_box(preview, 335, 394, 885, 574)
+	var preview := _make_panel(Color(0.015, 0.025, 0.03, 0.92))
+	_set_box(preview, 335, 394, 885, 552)
 	add_child(preview)
 	var prev_box := VBoxContainer.new()
 	prev_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -571,33 +608,33 @@ func _build_preview_panel() -> void:
 	prev_box.offset_top = 12
 	prev_box.offset_right = -18
 	prev_box.offset_bottom = -12
-	prev_box.add_theme_constant_override("separation", 5)
+	prev_box.add_theme_constant_override("separation", 4)
 	preview.add_child(prev_box)
 	var c: Dictionary = cards.get(selected_card_id, {})
-	_add_label(prev_box, "選択中：%s" % c.get("name_jp", selected_card_id), 23, gold)
-	_add_label(prev_box, "%s" % c.get("formula", ""), 23, Color(0.92, 0.92, 0.86))
+	_add_label_nowrap(prev_box, "選択中：%s" % c.get("name_jp", selected_card_id), 22, gold, 470)
+	_add_label_nowrap(prev_box, "%s" % c.get("formula", ""), 22, Color(0.92, 0.92, 0.86), 470)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	prev_box.add_child(row)
-	_add_label(row, "□に代入", 17, Color(0.86, 0.86, 0.80))
+	_add_label_nowrap(row, "□に代入", 17, Color(0.86, 0.86, 0.80), 90)
 	for n in range(1, 6):
 		var value := n
 		var txt := str(value)
 		if value == selected_invest:
 			txt = "□=" + str(value)
-		var b := _add_button(row, txt, func(): _select_invest(value), Vector2(58, 32))
+		var b := _add_button(row, txt, func(): _select_invest(value), Vector2(54, 32))
 		b.disabled = value > maxi(1, formula_power)
-	_add_label(prev_box, _preview_for(selected_card_id), 19, Color(0.9, 0.9, 0.84))
+	_add_label(prev_box, _preview_for(selected_card_id), 18, Color(0.9, 0.9, 0.84))
 	if selected_invest >= 5:
-		_add_label(prev_box, "警告：過負荷。リカに1ダメージ。", 16, Color(1.0, 0.65, 0.45))
+		_add_label(prev_box, "警告：過負荷。リカに1ダメージ。", 15, Color(1.0, 0.65, 0.45))
 
 func _select_invest(value: int) -> void:
 	selected_invest = value
 	show_battle()
 
 func _build_hand_panel() -> void:
-	var hand_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.82))
-	_set_box(hand_panel, 335, 586, 1248, 708)
+	var hand_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.86))
+	_set_box(hand_panel, 335, 562, 1248, 708)
 	add_child(hand_panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -629,7 +666,7 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 	if is_selected:
 		bg = Color(1.0, 0.94, 0.70, 1.0)
 	var p := _make_panel(bg)
-	p.custom_minimum_size = Vector2(205, 86)
+	p.custom_minimum_size = Vector2(238, 112)
 	parent.add_child(p)
 	var row := HBoxContainer.new()
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -643,16 +680,16 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_box.add_theme_constant_override("separation", 0)
 	row.add_child(text_box)
-	_add_label(text_box, "%s / %s" % [c.get("name_jp", card_id), c.get("name_en", "")], 17, dark_ink)
-	_add_label(text_box, c.get("formula", ""), 18, Color(0.03, 0.22, 0.18))
-	_add_label(text_box, c.get("short", ""), 11, Color(0.05, 0.05, 0.04))
+	_add_label_nowrap(text_box, "%s / %s" % [c.get("name_jp", card_id), c.get("name_en", "")], 16, dark_ink, 140)
+	_add_label_nowrap(text_box, c.get("formula", ""), 17, Color(0.03, 0.22, 0.18), 140)
+	_add_label(text_box, c.get("short", ""), 12, Color(0.05, 0.05, 0.04))
 	var actions := VBoxContainer.new()
-	actions.custom_minimum_size = Vector2(72, 0)
-	actions.add_theme_constant_override("separation", 4)
+	actions.custom_minimum_size = Vector2(70, 0)
+	actions.add_theme_constant_override("separation", 6)
 	row.add_child(actions)
-	_add_button(actions, "選択", func(): _select_card(card_id), Vector2(68, 28))
+	_add_button(actions, "選択", func(): _select_card(card_id), Vector2(66, 32))
 	var cost := _card_cost(card_id)
-	var b := _add_button(actions, "発動%d" % cost, func(): play_card(card_id), Vector2(68, 28))
+	var b := _add_button(actions, "発動%d" % cost, func(): play_card(card_id), Vector2(66, 32))
 	b.disabled = not _can_pay(card_id)
 
 func _select_card(card_id: String) -> void:
