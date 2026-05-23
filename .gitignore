@@ -1,0 +1,22 @@
+# Godot generated files
+.godot/
+.import/
+
+# Builds / exports
+build/
+export/
+dist/
+*.zip
+*.exe
+*.pck
+*.apk
+*.aab
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Optional: local editor settings
+*.swp
+*.swo

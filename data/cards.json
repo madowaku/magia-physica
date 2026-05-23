@@ -1,0 +1,93 @@
+[
+  {
+    "id": "push_formula",
+    "name_jp": "押力式",
+    "name_en": "Push Formula",
+    "system": "力学系・作用式",
+    "formula": "F = m(a + □)",
+    "cost_min": 1,
+    "cost_max": 5,
+    "short": "軽いものほどよく押す。壁にぶつけると追加ダメージ。",
+    "effect": "knockback",
+    "base_cost": 1,
+    "image": "res://assets/cards/push_formula.png"
+  },
+  {
+    "id": "momentum_needle",
+    "name_jp": "勢式",
+    "name_en": "Momentum Needle",
+    "system": "力学系・直進式",
+    "formula": "p = m(v + □)",
+    "cost_min": 1,
+    "cost_max": 5,
+    "short": "小石や武器を加速して攻撃する。安定した単体攻撃。",
+    "effect": "damage",
+    "base_cost": 1,
+    "image": "res://assets/cards/momentum_needle.png"
+  },
+  {
+    "id": "heat_rune",
+    "name_jp": "熱式",
+    "name_en": "Heat Rune",
+    "system": "熱学系・変化式",
+    "formula": "Q = mc(ΔT + □)",
+    "cost_min": 1,
+    "cost_max": 5,
+    "short": "敵を熱する。火傷を与える。",
+    "effect": "burn",
+    "base_cost": 1,
+    "image": "res://assets/cards/heat_rune.png"
+  },
+  {
+    "id": "slip_glyph",
+    "name_jp": "摩擦式",
+    "name_en": "Slip Glyph",
+    "system": "力学系・抵抗式",
+    "formula": "F_f = μN",
+    "cost_min": 1,
+    "cost_max": 5,
+    "short": "敵を滑りやすくする。次の押力式が強くなる。",
+    "effect": "slip",
+    "base_cost": 1,
+    "image": "res://assets/cards/slip_glyph.png"
+  },
+  {
+    "id": "mass_scan",
+    "name_jp": "質量測定",
+    "name_en": "Mass Scan",
+    "system": "観測系・解析式",
+    "formula": "m = F / a",
+    "cost_min": 0,
+    "cost_max": 0,
+    "short": "敵の重さを見抜く。次の力学式を強化する。",
+    "effect": "scan",
+    "base_cost": 0,
+    "image": "res://assets/cards/mass_scan.png"
+  },
+  {
+    "id": "margin_recovery",
+    "name_jp": "余白回収",
+    "name_en": "Margin Recovery",
+    "system": "汎用系・補助式",
+    "formula": "E_rec = κ・Δε",
+    "cost_min": 0,
+    "cost_max": 0,
+    "short": "式力を2回復し、カードを回す。",
+    "effect": "recover",
+    "base_cost": 0,
+    "image": "res://assets/cards/margin_recovery.png"
+  },
+  {
+    "id": "pebble_create",
+    "name_jp": "小石生成",
+    "name_en": "Pebble Create",
+    "system": "物質系・生成式",
+    "formula": "m_stone = small",
+    "cost_min": 0,
+    "cost_max": 0,
+    "short": "小石を2個作る。勢式の弾にできる。",
+    "effect": "pebble",
+    "base_cost": 0,
+    "image": ""
+  }
+]

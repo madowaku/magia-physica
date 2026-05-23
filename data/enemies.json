@@ -1,0 +1,42 @@
+[
+  {
+    "id": "puyo",
+    "name": "ぷよ魔",
+    "hp": 18,
+    "weight": "軽い",
+    "material": "ぷにぷに",
+    "wall_distance": 3,
+    "attack": 2,
+    "image": "res://assets/enemies/puyo.png"
+  },
+  {
+    "id": "goblin",
+    "name": "石ころゴブリン",
+    "hp": 24,
+    "weight": "普通",
+    "material": "石",
+    "wall_distance": 4,
+    "attack": 3,
+    "image": "res://assets/enemies/stone_goblin.png"
+  },
+  {
+    "id": "oily_slime",
+    "name": "油まみれスライム",
+    "hp": 22,
+    "weight": "軽い",
+    "material": "油",
+    "wall_distance": 5,
+    "attack": 1,
+    "image": "res://assets/enemies/oily_slime.png"
+  },
+  {
+    "id": "graph_golem",
+    "name": "黒板の番人 グラフ・ゴーレム",
+    "hp": 45,
+    "weight": "重い",
+    "material": "石",
+    "wall_distance": 3,
+    "attack": 4,
+    "image": "res://assets/enemies/graph_golem.png"
+  }
+]
