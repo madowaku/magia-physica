@@ -1,8 +1,8 @@
 extends Control
 
-# マギア・フィジカ：第一式 Godot prototype v0.4
+# マギア・フィジカ：第一式 Godot prototype v0.5
 # Godot 4.x / single-scene prototype.
-# v0.4: 押力式・勢式・熱式などの発動演出、浮き文字、画面フラッシュを追加。
+# v0.5: 発動演出に合わせた暫定効果音を追加。
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -46,6 +46,9 @@ var pending_fx: Dictionary = {}
 var enemy_token_ref: Control = null
 var battle_center_ref: Control = null
 
+var sfx_players: Dictionary = {}
+var sfx_enabled: bool = true
+
 var panel_color := Color(0.02, 0.035, 0.035, 0.84)
 var gold := Color(0.92, 0.72, 0.32)
 var parchment := Color(0.97, 0.92, 0.82)
@@ -53,6 +56,7 @@ var dark_ink := Color(0.04, 0.035, 0.03)
 
 func _ready() -> void:
 	_load_data()
+	_setup_sfx()
 	show_title()
 
 func _load_data() -> void:
@@ -79,6 +83,8 @@ func _load_json_by_id(path: String) -> Dictionary:
 
 func _clear() -> void:
 	for child in get_children():
+		if child.is_in_group("persistent_audio"):
+			continue
 		child.queue_free()
 
 func _full_rect(node: Control) -> void:
@@ -172,6 +178,43 @@ func _add_texture(parent: Node, path: String, min_size: Vector2 = Vector2(120, 1
 		tr.texture = load(path)
 	parent.add_child(tr)
 	return tr
+
+# -----------------------------------------------------------------------------
+# 暫定効果音
+# -----------------------------------------------------------------------------
+func _setup_sfx() -> void:
+	if has_node("SFXRoot"):
+		return
+	var root := Node.new()
+	root.name = "SFXRoot"
+	root.add_to_group("persistent_audio")
+	add_child(root)
+	var names := [
+		"ui_select", "card_cast", "push", "wall_hit", "hit", "heat",
+		"slip", "scan", "recover", "pebble", "overload", "enemy_attack",
+		"victory", "turn"
+	]
+	for name in names:
+		var path := "res://assets/audio/%s.wav" % name
+		if not ResourceLoader.exists(path):
+			continue
+		var player := AudioStreamPlayer.new()
+		player.name = name
+		player.stream = load(path)
+		player.volume_db = -9.0
+		root.add_child(player)
+		sfx_players[name] = player
+
+func _play_sfx(name: String) -> void:
+	if not sfx_enabled:
+		return
+	if not sfx_players.has(name):
+		return
+	var player: AudioStreamPlayer = sfx_players[name]
+	if player == null:
+		return
+	player.stop()
+	player.play()
 
 # -----------------------------------------------------------------------------
 # タイトル / 図鑑 / 会話
@@ -641,6 +684,7 @@ func _build_preview_panel() -> void:
 
 func _select_invest(value: int) -> void:
 	selected_invest = value
+	_play_sfx("ui_select")
 	show_battle()
 
 func _build_hand_panel() -> void:
@@ -705,6 +749,7 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 
 func _select_card(card_id: String) -> void:
 	selected_card_id = card_id
+	_play_sfx("ui_select")
 	show_battle()
 
 func _build_log_panel() -> void:
@@ -745,27 +790,39 @@ func _play_pending_fx() -> void:
 		"push":
 			_fx_push(int(fx.get("push", 0)), bool(fx.get("wall_hit", false)), int(fx.get("damage", 0)))
 		"damage":
+			_play_sfx("hit")
 			_fx_enemy_hit("-%d" % int(fx.get("damage", 0)), Color(1.0, 0.86, 0.45))
 		"heat":
+			_play_sfx("heat")
 			_fx_enemy_hit("熱 %d / 火傷+%d" % [int(fx.get("damage", 0)), int(fx.get("burn", 0))], Color(1.0, 0.45, 0.22))
 			_flash_screen(Color(1.0, 0.35, 0.10, 0.18), 0.34)
 		"slip":
+			_play_sfx("slip")
 			_spawn_float_text("滑り+%d" % int(fx.get("bonus", 0)), Vector2(525, 305), Color(0.65, 0.92, 1.0))
 		"scan":
+			_play_sfx("scan")
 			_spawn_float_text("観測+1", Vector2(520, 305), Color(0.82, 1.0, 0.72))
 		"recover":
+			_play_sfx("recover")
 			_spawn_float_text("式力+2", Vector2(180, 340), Color(1.0, 0.92, 0.45))
 		"pebble":
+			_play_sfx("pebble")
 			_spawn_float_text("小石+2", Vector2(520, 305), Color(0.92, 0.88, 0.72))
 		_:
 			pass
 	if bool(fx.get("overload", false)):
+		_play_sfx("overload")
 		_flash_screen(Color(1.0, 0.05, 0.05, 0.18), 0.28)
 		_spawn_float_text("過負荷！", Vector2(190, 220), Color(1.0, 0.38, 0.25))
 	if bool(fx.get("victory_after", false)):
+		_play_sfx("victory")
 		get_tree().create_timer(0.75).timeout.connect(func(): show_victory())
 
 func _fx_push(push: int, wall_hit: bool, damage: int) -> void:
+	if wall_hit:
+		_play_sfx("wall_hit")
+	else:
+		_play_sfx("push")
 	if enemy_token_ref != null:
 		var start_pos := enemy_token_ref.position
 		var push_px: float = clampf(float(push) * 16.0, 12.0, 86.0)
@@ -847,6 +904,7 @@ func play_card(card_id: String) -> void:
 	formula_power -= cost
 	_remove_card_from_hand(card_id)
 	battle_log.append("%s を発動。" % c.get("name_jp", card_id))
+	_play_sfx("card_cast")
 	match effect:
 		"knockback":
 			_apply_push()
@@ -933,6 +991,7 @@ func _check_after_card() -> void:
 	show_battle()
 
 func end_turn() -> void:
+	_play_sfx("turn")
 	if burn >= 3:
 		enemy_hp -= 2
 		battle_log.append("火傷で2ダメージ！")
@@ -951,6 +1010,7 @@ func end_turn() -> void:
 	show_battle()
 
 func _enemy_action() -> void:
+	_play_sfx("enemy_attack")
 	var enemy_id := String(enemy.get("id", ""))
 	var attack := int(enemy.get("attack", 2))
 	if enemy_id == "graph_golem" and turn % 3 == 0:
@@ -1046,6 +1106,7 @@ func _add_reward_card(parent: Node, card_id: String) -> void:
 	_add_button(box, "選ぶ", func(): choose_reward(card_id), Vector2(220, 44))
 
 func choose_reward(card_id: String) -> void:
+	_play_sfx("ui_select")
 	run_deck.append(card_id)
 	_go_next_battle()
 
