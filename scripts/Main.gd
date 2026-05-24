@@ -562,6 +562,7 @@ func _build_battle_center() -> void:
 	enemy_token.custom_minimum_size = Vector2(176, 154)
 	arena.add_child(enemy_token)
 	enemy_token_ref = enemy_token
+	enemy_token_ref = enemy_token
 	var enemy_box := VBoxContainer.new()
 	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	enemy_box.offset_left = 12
