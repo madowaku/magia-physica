@@ -1,8 +1,8 @@
 extends Control
 
-# マギア・フィジカ：第一式 Godot prototype v0.3.2
+# マギア・フィジカ：第一式 Godot prototype v0.4
 # Godot 4.x / single-scene prototype.
-# v0.3.2: バトル背景をプレーン化し、手札・プレビュー・敵表示の視認性を調整。
+# v0.4: 押力式・勢式・熱式などの発動演出、浮き文字、画面フラッシュを追加。
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -40,6 +40,11 @@ var draw_pile: Array = []
 var discard_pile: Array = []
 var hand_cards: Array = []
 var battle_log: Array = []
+
+# v0.4 action FX state. These are rebuilt every show_battle() call.
+var pending_fx: Dictionary = {}
+var enemy_token_ref: Control = null
+var battle_center_ref: Control = null
 
 var panel_color := Color(0.02, 0.035, 0.035, 0.84)
 var gold := Color(0.92, 0.72, 0.32)
@@ -450,6 +455,8 @@ func _preview_for(card_id: String) -> String:
 # -----------------------------------------------------------------------------
 func show_battle() -> void:
 	_clear()
+	enemy_token_ref = null
+	battle_center_ref = null
 	_add_background("res://assets/images/battle_plain_bg.png", 0.16)
 	_build_top_hud()
 	_build_left_status_column()
@@ -458,6 +465,7 @@ func show_battle() -> void:
 	_build_preview_panel()
 	_build_hand_panel()
 	_build_log_panel()
+	_play_pending_fx()
 
 func _build_top_hud() -> void:
 	var top := _make_panel(Color(0.015, 0.025, 0.03, 0.88))
@@ -534,6 +542,7 @@ func _build_battle_center() -> void:
 	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.82))
 	_set_box(panel, 326, 90, 898, 382)
 	add_child(panel)
+	battle_center_ref = panel
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.offset_left = 18
@@ -552,6 +561,8 @@ func _build_battle_center() -> void:
 	var enemy_token := _make_panel(Color(0.08, 0.19, 0.20, 0.88))
 	enemy_token.custom_minimum_size = Vector2(176, 154)
 	arena.add_child(enemy_token)
+	enemy_token_ref = enemy_token
+	enemy_token_ref = enemy_token
 	var enemy_box := VBoxContainer.new()
 	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	enemy_box.offset_left = 12
@@ -720,6 +731,103 @@ func _last_logs(limit: int = 6) -> String:
 		lines.append(String(battle_log[i]))
 	return "\n".join(lines)
 
+
+# -----------------------------------------------------------------------------
+# v0.4 発動演出
+# -----------------------------------------------------------------------------
+func _play_pending_fx() -> void:
+	if pending_fx.is_empty():
+		return
+	var fx := pending_fx.duplicate()
+	pending_fx.clear()
+	var fx_type := String(fx.get("type", ""))
+	match fx_type:
+		"push":
+			_fx_push(int(fx.get("push", 0)), bool(fx.get("wall_hit", false)), int(fx.get("damage", 0)))
+		"damage":
+			_fx_enemy_hit("-%d" % int(fx.get("damage", 0)), Color(1.0, 0.86, 0.45))
+		"heat":
+			_fx_enemy_hit("熱 %d / 火傷+%d" % [int(fx.get("damage", 0)), int(fx.get("burn", 0))], Color(1.0, 0.45, 0.22))
+			_flash_screen(Color(1.0, 0.35, 0.10, 0.18), 0.34)
+		"slip":
+			_spawn_float_text("滑り+%d" % int(fx.get("bonus", 0)), Vector2(525, 305), Color(0.65, 0.92, 1.0))
+		"scan":
+			_spawn_float_text("観測+1", Vector2(520, 305), Color(0.82, 1.0, 0.72))
+		"recover":
+			_spawn_float_text("式力+2", Vector2(180, 340), Color(1.0, 0.92, 0.45))
+		"pebble":
+			_spawn_float_text("小石+2", Vector2(520, 305), Color(0.92, 0.88, 0.72))
+		_:
+			pass
+	if bool(fx.get("overload", false)):
+		_flash_screen(Color(1.0, 0.05, 0.05, 0.18), 0.28)
+		_spawn_float_text("過負荷！", Vector2(190, 220), Color(1.0, 0.38, 0.25))
+	if bool(fx.get("victory_after", false)):
+		get_tree().create_timer(0.75).timeout.connect(func(): show_victory())
+
+func _fx_push(push: int, wall_hit: bool, damage: int) -> void:
+	if enemy_token_ref != null:
+		var start_pos := enemy_token_ref.position
+		var push_px: float = clampf(float(push) * 16.0, 12.0, 86.0)
+		enemy_token_ref.position.x = start_pos.x - push_px
+		enemy_token_ref.modulate = Color(1.0, 1.0, 1.0, 0.86)
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(enemy_token_ref, "position:x", start_pos.x, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(enemy_token_ref, "modulate", Color.WHITE, 0.24)
+	var text := "%dマス押す" % push
+	if wall_hit:
+		text = "壁衝突！ -%d" % damage
+		_flash_screen(Color(1.0, 0.86, 0.25, 0.18), 0.30)
+		_shake_battle_center(8.0)
+	_spawn_float_text(text, Vector2(620, 260), Color(1.0, 0.92, 0.45))
+
+func _fx_enemy_hit(text: String, color: Color) -> void:
+	if enemy_token_ref != null:
+		var tw := create_tween()
+		tw.tween_property(enemy_token_ref, "scale", Vector2(1.08, 1.08), 0.08)
+		tw.tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.16)
+	_spawn_float_text(text, Vector2(575, 265), color)
+
+func _flash_screen(color: Color, duration: float) -> void:
+	var flash := ColorRect.new()
+	_full_rect(flash)
+	flash.color = color
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(flash)
+	flash.move_to_front()
+	var tw := create_tween()
+	tw.tween_property(flash, "modulate:a", 0.0, duration)
+	tw.tween_callback(flash.queue_free)
+
+func _spawn_float_text(text: String, pos: Vector2, color: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	label.position = pos
+	label.z_index = 100
+	label.add_theme_font_size_override("font_size", 26)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(label)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(label, "position:y", pos.y - 38.0, 0.62).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(label, "modulate:a", 0.0, 0.62)
+	tw.chain().tween_callback(label.queue_free)
+
+func _shake_battle_center(strength: float = 6.0) -> void:
+	if battle_center_ref == null:
+		return
+	var start_pos := battle_center_ref.position
+	var tw := create_tween()
+	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(strength, 0), 0.035)
+	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(-strength, 0), 0.05)
+	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(strength * 0.5, 0), 0.04)
+	tw.tween_property(battle_center_ref, "position", start_pos, 0.05)
+
 # -----------------------------------------------------------------------------
 # カード効果 / ターン処理
 # -----------------------------------------------------------------------------
@@ -759,19 +867,22 @@ func play_card(card_id: String) -> void:
 	if cost >= 5 and effect in ["knockback", "damage", "burn", "slip"]:
 		player_hp = maxi(1, player_hp - 1)
 		battle_log.append("過負荷！ リカに1ダメージ。")
+		pending_fx["overload"] = true
 	_check_after_card()
 
 func _apply_push() -> void:
 	var push := _push_amount()
 	wall_distance = maxi(0, wall_distance - push)
 	battle_log.append("□=%d。%sを%dマス押した！" % [selected_invest, enemy.get("name", "敵"), push])
-	if wall_distance <= 0:
-		var damage := push + 2
+	var wall_hit := wall_distance <= 0
+	var damage := 0
+	if wall_hit:
+		damage = push + 2
 		enemy_hp -= damage
 		battle_log.append("壁衝突！ %dダメージ！" % damage)
+	pending_fx = {"type":"push", "push":push, "wall_hit":wall_hit, "damage":damage}
 	slip_bonus = 0
 	scan_bonus = 0
-
 func _apply_momentum() -> void:
 	var damage := _momentum_damage()
 	var used_pebble := false
@@ -783,8 +894,8 @@ func _apply_momentum() -> void:
 		battle_log.append("小石を加速！ %dダメージ！" % damage)
 	else:
 		battle_log.append("勢式直撃！ %dダメージ！" % damage)
+	pending_fx = {"type":"damage", "damage":damage}
 	scan_bonus = 0
-
 func _apply_heat() -> void:
 	var damage := _heat_damage()
 	var burn_add := selected_invest
@@ -795,32 +906,31 @@ func _apply_heat() -> void:
 	enemy_hp -= damage
 	burn += burn_add
 	battle_log.append("熱式：%dダメージ、火傷+%d。" % [damage, burn_add])
-
+	pending_fx = {"type":"heat", "damage":damage, "burn":burn_add}
 func _apply_recovery() -> void:
 	formula_power = mini(max_formula_power, formula_power + 2)
 	_draw_cards(1)
 	battle_log.append("余白回収：式力+2、カードを1枚引いた。")
-
+	pending_fx = {"type":"recover"}
 func _apply_scan() -> void:
 	scan_bonus += 1
 	_draw_cards(1)
 	battle_log.append("質量測定：次の力学式+1、カードを1枚引いた。")
-
+	pending_fx = {"type":"scan"}
 func _apply_slip() -> void:
 	var bonus := selected_invest + 1
 	slip_bonus += bonus
 	battle_log.append("摩擦式：滑り+%d。次の押力式が伸びる。" % bonus)
-
+	pending_fx = {"type":"slip", "bonus":bonus}
 func _apply_pebble() -> void:
 	pebbles += 2
 	_draw_cards(1)
 	battle_log.append("小石生成：小石+2、カードを1枚引いた。")
-
+	pending_fx = {"type":"pebble"}
 func _check_after_card() -> void:
 	if enemy_hp <= 0:
-		show_victory()
-	else:
-		show_battle()
+		pending_fx["victory_after"] = true
+	show_battle()
 
 func end_turn() -> void:
 	if burn >= 3:
