@@ -6,6 +6,7 @@ extends Control
 
 const UiFactoryScript = preload("res://scripts/ui/UiFactory.gd")
 const BattleStateScript = preload("res://scripts/battle/BattleState.gd")
+const CardEffectsScript = preload("res://scripts/battle/CardEffects.gd")
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -26,10 +27,12 @@ var parchment := Color(0.97, 0.92, 0.82)
 var dark_ink := Color(0.04, 0.035, 0.03)
 var ui
 var battle_state
+var card_effects
 
 func _ready() -> void:
 	ui = UiFactoryScript.new(self, panel_color, gold)
 	battle_state = BattleStateScript.new()
+	card_effects = CardEffectsScript.new()
 	_load_data()
 	_setup_sfx()
 	show_title()
@@ -274,38 +277,12 @@ func _card_cost(card_id: String) -> int:
 func _can_pay(card_id: String) -> bool:
 	return battle_state.can_pay(card_id, cards)
 
-func _weight_multiplier() -> float:
-	match String(battle_state.enemy.get("weight", "普通")):
-		"軽い": return 2.0
-		"普通": return 1.0
-		"重い": return 0.5
-		"超重い": return 0.25
-		_: return 1.0
-
-func _push_amount() -> int:
-	return maxi(0, int(ceil(float(battle_state.selected_invest) * _weight_multiplier() + float(battle_state.slip_bonus + battle_state.scan_bonus))))
-
-func _momentum_damage() -> int:
-	var damage: int = battle_state.selected_invest * 2 + battle_state.scan_bonus
-	if battle_state.pebbles > 0:
-		damage += 2
-	return maxi(1, damage)
-
-func _heat_damage() -> int:
-	var damage: int = battle_state.selected_invest + 1
-	var enemy_material := String(battle_state.enemy.get("material", ""))
-	if enemy_material == "油":
-		damage += 1
-	elif enemy_material == "石":
-		damage = maxi(1, damage - 1)
-	return damage
-
 func _preview_for(card_id: String) -> String:
 	var c: Dictionary = cards.get(card_id, {})
 	var effect := String(c.get("effect", ""))
 	match effect:
 		"knockback":
-			var push := _push_amount()
+			var push: int = card_effects.push_amount(battle_state)
 			var text := "□=%d → %dマス押す" % [battle_state.selected_invest, push]
 			if push >= battle_state.wall_distance:
 				text += "\n壁衝突：%dダメージ" % (push + 2)
@@ -316,12 +293,12 @@ func _preview_for(card_id: String) -> String:
 			var extra := ""
 			if battle_state.pebbles > 0:
 				extra = " / 小石+2"
-			return "□=%d → %dダメージ%s" % [battle_state.selected_invest, _momentum_damage(), extra]
+			return "□=%d → %dダメージ%s" % [battle_state.selected_invest, card_effects.momentum_damage(battle_state), extra]
 		"burn":
 			var burn_add: int = battle_state.selected_invest
 			if String(battle_state.enemy.get("material", "")) == "油":
 				burn_add += 1
-			return "□=%d → %dダメージ + 火傷%d" % [battle_state.selected_invest, _heat_damage(), burn_add]
+			return "□=%d → %dダメージ + 火傷%d" % [battle_state.selected_invest, card_effects.heat_damage(battle_state), burn_add]
 		"slip":
 			return "□=%d → 滑り+%d\n次の押力式が強くなる" % [battle_state.selected_invest, battle_state.selected_invest + 1]
 		"scan":
@@ -758,86 +735,15 @@ func play_card(card_id: String) -> void:
 	_remove_card_from_hand(card_id)
 	battle_state.battle_log.append("%s を発動。" % c.get("name_jp", card_id))
 	_play_sfx("card_cast")
-	match effect:
-		"knockback":
-			_apply_push()
-		"damage":
-			_apply_momentum()
-		"burn":
-			_apply_heat()
-		"recover":
-			_apply_recovery()
-		"scan":
-			_apply_scan()
-		"slip":
-			_apply_slip()
-		"pebble":
-			_apply_pebble()
-		_:
-			battle_state.battle_log.append("まだ効果未実装：" + card_id)
+	var effect_fx: Dictionary = card_effects.apply(card_id, cards, battle_state)
+	if not effect_fx.is_empty():
+		pending_fx = effect_fx
 	if cost >= 5 and effect in ["knockback", "damage", "burn", "slip"]:
 		battle_state.player_hp = maxi(1, battle_state.player_hp - 1)
 		battle_state.battle_log.append("過負荷！ リカに1ダメージ。")
 		pending_fx["overload"] = true
 	_check_after_card()
 
-func _apply_push() -> void:
-	var push := _push_amount()
-	battle_state.wall_distance = maxi(0, battle_state.wall_distance - push)
-	battle_state.battle_log.append("□=%d。%sを%dマス押した！" % [battle_state.selected_invest, battle_state.enemy.get("name", "敵"), push])
-	var wall_hit: bool = battle_state.wall_distance <= 0
-	var damage := 0
-	if wall_hit:
-		damage = push + 2
-		battle_state.enemy_hp -= damage
-		battle_state.battle_log.append("壁衝突！ %dダメージ！" % damage)
-	pending_fx = {"type":"push", "push":push, "wall_hit":wall_hit, "damage":damage}
-	battle_state.slip_bonus = 0
-	battle_state.scan_bonus = 0
-func _apply_momentum() -> void:
-	var damage: int = _momentum_damage()
-	var used_pebble := false
-	if battle_state.pebbles > 0:
-		battle_state.pebbles -= 1
-		used_pebble = true
-	battle_state.enemy_hp -= damage
-	if used_pebble:
-		battle_state.battle_log.append("小石を加速！ %dダメージ！" % damage)
-	else:
-		battle_state.battle_log.append("勢式直撃！ %dダメージ！" % damage)
-	pending_fx = {"type":"damage", "damage":damage}
-	battle_state.scan_bonus = 0
-func _apply_heat() -> void:
-	var damage: int = _heat_damage()
-	var burn_add: int = battle_state.selected_invest
-	if String(battle_state.enemy.get("material", "")) == "油":
-		burn_add += 1
-		battle_state.enemy_hp -= 1
-		battle_state.battle_log.append("油素材に着火しやすい！ 追加1ダメージ。")
-	battle_state.enemy_hp -= damage
-	battle_state.burn += burn_add
-	battle_state.battle_log.append("熱式：%dダメージ、火傷+%d。" % [damage, burn_add])
-	pending_fx = {"type":"heat", "damage":damage, "burn":burn_add}
-func _apply_recovery() -> void:
-	battle_state.formula_power = mini(battle_state.max_formula_power, battle_state.formula_power + 2)
-	_draw_cards(1)
-	battle_state.battle_log.append("余白回収：式力+2、カードを1枚引いた。")
-	pending_fx = {"type":"recover"}
-func _apply_scan() -> void:
-	battle_state.scan_bonus += 1
-	_draw_cards(1)
-	battle_state.battle_log.append("質量測定：次の力学式+1、カードを1枚引いた。")
-	pending_fx = {"type":"scan"}
-func _apply_slip() -> void:
-	var bonus: int = battle_state.selected_invest + 1
-	battle_state.slip_bonus += bonus
-	battle_state.battle_log.append("摩擦式：滑り+%d。次の押力式が伸びる。" % bonus)
-	pending_fx = {"type":"slip", "bonus":bonus}
-func _apply_pebble() -> void:
-	battle_state.pebbles += 2
-	_draw_cards(1)
-	battle_state.battle_log.append("小石生成：小石+2、カードを1枚引いた。")
-	pending_fx = {"type":"pebble"}
 func _check_after_card() -> void:
 	if battle_state.enemy_hp <= 0:
 		pending_fx["victory_after"] = true
