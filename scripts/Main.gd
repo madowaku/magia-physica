@@ -855,11 +855,62 @@ func _add_reward_card(parent: Node, card_id: String) -> void:
 	ui.add_label(box, c.get("name_en", ""), 16, Color(0.22, 0.18, 0.12))
 	ui.add_label(box, c.get("formula", ""), 28, Color(0.03, 0.22, 0.18))
 	ui.add_label(box, c.get("system", ""), 15, Color(0.25, 0.22, 0.18))
+	ui.add_label(box, _reward_tag_text(card_id), 16, Color(0.42, 0.20, 0.08))
 	ui.add_label(box, c.get("short", ""), 18, Color(0.05, 0.05, 0.04))
+	ui.add_label(box, _reward_reason_text(card_id), 16, Color(0.03, 0.22, 0.18))
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
 	ui.add_button(box, "選ぶ", func(): choose_reward(card_id), Vector2(220, 44))
+
+func _reward_tag_text(card_id: String) -> String:
+	var c: Dictionary = cards.get(card_id, {})
+	match String(c.get("effect", "")):
+		"knockback":
+			return "タグ：押す / 壁衝突"
+		"damage":
+			return "タグ：直撃 / 小石連携"
+		"burn":
+			return "タグ：火傷 / 油に強い"
+		"slip":
+			return "タグ：準備 / 押力補助"
+		"scan":
+			return "タグ：観測 / 1枚引く"
+		"recover":
+			return "タグ：式力回復 / 1枚引く"
+		"pebble":
+			return "タグ：小石 / 勢式補助"
+		_:
+			return "タグ：実験カード"
+
+func _reward_reason_text(card_id: String) -> String:
+	var next_id := String(battle_state.battle_order[clampi(battle_state.battle_index + 1, 0, battle_state.battle_order.size() - 1)])
+	match next_id:
+		"goblin":
+			match card_id:
+				"slip_glyph":
+					return "おすすめ：壁際に運びやすい。"
+				"pebble_create":
+					return "おすすめ：勢式の打点を底上げ。"
+				"margin_recovery":
+					return "おすすめ：長めの戦闘で手札を回す。"
+		"oily_slime":
+			match card_id:
+				"heat_rune":
+					return "おすすめ：油素材に追加ダメージ。"
+				"mass_scan":
+					return "おすすめ：軽い敵への押しを伸ばす。"
+				"pebble_create":
+					return "おすすめ：低攻撃の間に弾を準備。"
+		"graph_golem":
+			match card_id:
+				"mass_scan":
+					return "おすすめ：重い敵への打点を補う。"
+				"slip_glyph":
+					return "おすすめ：重い敵を押す準備。"
+				"margin_recovery":
+					return "おすすめ：長期戦の式力を保つ。"
+	return "おすすめ：次戦の選択肢を増やす。"
 
 func choose_reward(card_id: String) -> void:
 	_play_sfx("ui_select")
