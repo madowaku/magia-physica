@@ -419,7 +419,7 @@ func _build_enemy_panel() -> void:
 	ui.add_label(enemy_box, "HP %d/%d" % [maxi(0, battle_state.enemy_hp), battle_state.enemy_max_hp], 25)
 	ui.add_label(enemy_box, "重さ：%s  素材：%s" % [battle_state.enemy.get("weight", "?"), battle_state.enemy.get("material", "?")], 18)
 	ui.add_label(enemy_box, "壁まで：%d / 初期%d" % [battle_state.wall_distance, battle_state.initial_wall_distance], 18)
-	ui.add_label(enemy_box, "攻撃：%d" % int(battle_state.enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
+	ui.add_label(enemy_box, _enemy_intent_text(), 17, Color(1.0, 0.78, 0.45))
 
 func _build_battle_center() -> void:
 	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.82))
@@ -488,6 +488,19 @@ func _enemy_token_icon() -> String:
 			return "▣"
 		_:
 			return "●"
+
+func _enemy_intent_text() -> String:
+	var enemy_id := String(battle_state.enemy.get("id", ""))
+	var attack := int(battle_state.enemy.get("attack", 2))
+	if enemy_id == "graph_golem" and battle_state.turn % 3 == 0:
+		return "敵予告：黒板修復 HP+4"
+	if enemy_id == "oily_slime":
+		if battle_state.burn > 0:
+			return "敵予告：体当たり%d + 火傷+1" % attack
+		return "敵予告：体当たり%dダメージ" % attack
+	if enemy_id == "goblin" and battle_state.wall_distance <= 1:
+		return "敵予告：踏ん張り%dダメージ" % (attack + 1)
+	return "敵予告：攻撃%dダメージ" % attack
 
 func _build_enemy_visual() -> void:
 	_build_battle_center()
