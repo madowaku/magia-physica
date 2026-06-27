@@ -1,0 +1,145 @@
+version: 2
+
+goal:
+  title: "マギア・フィジカ 面白さ強化トランシェ"
+  slug: "magia-physica-fun-tranche"
+  kind: open_ended
+  tranche: "現状調査、最初の安全な面白さ改善の選定、実装、Godot 4.6.1 検証、監査まで行う。"
+  status: done
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+active_task: null
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    reasoning_hint: default
+    objective: "Repo構成、現行バトル体験、検証コマンド、アセット状況、面白さ改善候補をファイル根拠つきで調査する。"
+    inputs:
+      - "README_JP.md"
+      - "data/cards.json"
+      - "data/enemies.json"
+      - "scripts/Main.gd"
+      - "scripts/battle/BattleState.gd"
+      - "docs"
+      - "assets"
+    constraints:
+      - "Read-only."
+      - "実装ファイルは編集しない。"
+      - "Godot 4.6.1 と日本語UIを前提にする。"
+    expected_output:
+      - "Repo map"
+      - "Verification commands"
+      - "Ranked improvement candidates"
+      - "Candidate next tasks"
+    receipt:
+      result: done
+      summary: "Repo is a compact Godot 4.6.1 card-battle prototype. Main.gd builds screens and runs flow; BattleState owns combat/deck state after v0.6.2. Highest-value safe candidates were enemy intent preview, reward choice meaning, and asset polish."
+      evidence:
+        - "README_JP.md"
+        - "data/cards.json"
+        - "data/enemies.json"
+        - "scripts/Main.gd"
+        - "scripts/battle/BattleState.gd"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Scout findings から最初の安全な実装スライスを impact/confidence/reversibility/verification で1つ選ぶ。"
+    inputs:
+      - "T001 receipt"
+    constraints:
+      - "Do not implement."
+      - "レビュー可能な小ささにする。"
+    expected_output:
+      - "Decision"
+      - "Exact Worker objective"
+      - "allowed_files"
+      - "verify"
+      - "stop_if"
+    receipt:
+      result: done
+      decision: "Implement enemy intent preview first. It improves tactical readability and player agency without changing combat math, assets, SFX, or enemy behavior."
+      exact_worker_objective: "Add a small Japanese enemy intent line to the battle UI that previews the next enemy action based on existing _enemy_action rules."
+      allowed_files:
+        - "scripts/Main.gd"
+        - "docs/goals/magia-physica-fun-tranche/goal.md"
+        - "docs/goals/magia-physica-fun-tranche/state.yaml"
+      verify:
+        - "Godot MCP run_project/get_debug_output has no errors."
+        - "Headless smoke returns SMOKE_OK."
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: default
+    objective: "Add a small Japanese enemy intent line to the battle UI that previews the next enemy action based on existing _enemy_action rules."
+    allowed_files:
+      - "scripts/Main.gd"
+      - "docs/goals/magia-physica-fun-tranche/goal.md"
+      - "docs/goals/magia-physica-fun-tranche/state.yaml"
+    verify:
+      - "Godot MCP run_project/get_debug_output has no errors."
+      - "Headless smoke returns SMOKE_OK."
+    stop_if:
+      - "Need to change combat math or enemy AI behavior."
+      - "Need new generated assets or SFX."
+      - "Verification fails twice."
+    receipt:
+      result: done
+      changed_files:
+        - "scripts/Main.gd"
+        - "docs/goals/magia-physica-fun-tranche/goal.md"
+        - "docs/goals/magia-physica-fun-tranche/state.yaml"
+      commands:
+        - cmd: "Godot MCP run_project/get_debug_output"
+          status: pass
+        - cmd: "Headless smoke C:/tmp/magia_ui_smoke.gd"
+          status: pass
+      summary: "Enemy panel now shows a Japanese next-action preview derived from existing enemy action rules, replacing the generic attack number without changing combat math."
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "実装スライスが今回のユーザー要望に対して十分か監査する。"
+    inputs:
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+    constraints:
+      - "Do not implement."
+      - "Required Worker が queued/active のままなら complete にしない。"
+    expected_output:
+      - "complete | not_complete"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt:
+      result: done
+      decision: complete
+      summary: "Current tranche is complete: the repo was mapped, a safe first gameplay-readability slice was selected, enemy intent preview was implemented, and Godot 4.6.1 plus headless smoke verification passed."
+
+checks:
+  dirty_fingerprint: unknown
+  last_verification:
+    result: pass
+    task: T003
+    commands:
+      - "Godot MCP run_project/get_debug_output"
+      - "Headless smoke C:/tmp/magia_ui_smoke.gd => SMOKE_OK"
