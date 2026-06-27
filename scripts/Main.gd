@@ -5,43 +5,12 @@ extends Control
 # v0.5: 発動演出に合わせた暫定効果音を追加。
 
 const UiFactoryScript = preload("res://scripts/ui/UiFactory.gd")
+const BattleStateScript = preload("res://scripts/battle/BattleState.gd")
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
 var tutorial_lines: Array = []
 var tutorial_index: int = 0
-
-var player_hp: int = 32
-var player_max_hp: int = 32
-var formula_power: int = 5
-var max_formula_power: int = 5
-
-var battle_order: Array = ["puyo", "goblin", "oily_slime", "graph_golem"]
-var battle_index: int = 0
-var enemy: Dictionary = {}
-var enemy_hp: int = 18
-var enemy_max_hp: int = 18
-var wall_distance: int = 3
-var initial_wall_distance: int = 3
-
-var burn: int = 0
-var pebbles: int = 0
-var slip_bonus: int = 0
-var scan_bonus: int = 0
-var turn: int = 1
-var selected_invest: int = 1
-var selected_card_id: String = "push_formula"
-
-var base_deck: Array = [
-	"push_formula", "push_formula",
-	"momentum_needle", "momentum_needle",
-	"heat_rune", "mass_scan", "margin_recovery"
-]
-var run_deck: Array = []
-var draw_pile: Array = []
-var discard_pile: Array = []
-var hand_cards: Array = []
-var battle_log: Array = []
 
 # v0.4 action FX state. These are rebuilt every show_battle() call.
 var pending_fx: Dictionary = {}
@@ -56,9 +25,11 @@ var gold := Color(0.92, 0.72, 0.32)
 var parchment := Color(0.97, 0.92, 0.82)
 var dark_ink := Color(0.04, 0.035, 0.03)
 var ui
+var battle_state
 
 func _ready() -> void:
 	ui = UiFactoryScript.new(self, panel_color, gold)
+	battle_state = BattleStateScript.new()
 	_load_data()
 	_setup_sfx()
 	show_title()
@@ -158,11 +129,8 @@ func show_title() -> void:
 	ui.add_label(box, "Ver. prototype-0.3.2-ui / Godot 4.x", 16, Color(0.75, 0.72, 0.65))
 
 func start_new_run(with_tutorial: bool) -> void:
-	player_hp = player_max_hp
-	battle_index = 0
-	run_deck = base_deck.duplicate()
+	battle_state.start_new_run()
 	tutorial_index = 0
-	battle_log.clear()
 	if with_tutorial:
 		show_dialogue()
 	else:
@@ -288,66 +256,26 @@ func _next_dialogue() -> void:
 # バトル状態 / デッキ処理
 # -----------------------------------------------------------------------------
 func start_battle() -> void:
-	formula_power = max_formula_power
-	turn = 1
-	burn = 0
-	pebbles = 0
-	slip_bonus = 0
-	scan_bonus = 0
-	selected_invest = 1
-	selected_card_id = "push_formula"
-	battle_log.clear()
-	var enemy_id := String(battle_order[clampi(battle_index, 0, battle_order.size() - 1)])
-	enemy = enemies.get(enemy_id, {"name":"ぷよ魔", "hp":18, "weight":"軽い", "material":"ぷにぷに", "wall_distance":3, "attack":2})
-	enemy_hp = int(enemy.get("hp", 18))
-	enemy_max_hp = enemy_hp
-	wall_distance = int(enemy.get("wall_distance", 3))
-	initial_wall_distance = wall_distance
-	draw_pile = run_deck.duplicate()
-	draw_pile.shuffle()
-	discard_pile.clear()
-	hand_cards.clear()
-	_draw_cards(3)
-	battle_log.append("第%d戦：%s" % [battle_index + 1, enemy.get("name", "敵")])
+	battle_state.start_battle(enemies)
 	show_battle()
 
 func _draw_cards(amount: int) -> void:
-	for i in range(amount):
-		if draw_pile.is_empty():
-			if discard_pile.is_empty():
-				return
-			draw_pile = discard_pile.duplicate()
-			discard_pile.clear()
-			draw_pile.shuffle()
-		if draw_pile.is_empty():
-			return
-		hand_cards.append(draw_pile.pop_back())
+	battle_state.draw_cards(amount)
 
 func _discard_hand() -> void:
-	for id in hand_cards:
-		discard_pile.append(id)
-	hand_cards.clear()
+	battle_state.discard_hand()
 
 func _remove_card_from_hand(card_id: String) -> void:
-	var index := hand_cards.find(card_id)
-	if index >= 0:
-		hand_cards.remove_at(index)
-	discard_pile.append(card_id)
+	battle_state.remove_card_from_hand(card_id)
 
 func _card_cost(card_id: String) -> int:
-	var c: Dictionary = cards.get(card_id, {})
-	var effect := String(c.get("effect", ""))
-	if effect in ["recover", "scan", "pebble"]:
-		return int(c.get("base_cost", 0))
-	var min_cost := int(c.get("cost_min", 1))
-	var max_cost := int(c.get("cost_max", 5))
-	return clampi(selected_invest, min_cost, max_cost)
+	return battle_state.card_cost(card_id, cards)
 
 func _can_pay(card_id: String) -> bool:
-	return formula_power >= _card_cost(card_id)
+	return battle_state.can_pay(card_id, cards)
 
 func _weight_multiplier() -> float:
-	match String(enemy.get("weight", "普通")):
+	match String(battle_state.enemy.get("weight", "普通")):
 		"軽い": return 2.0
 		"普通": return 1.0
 		"重い": return 0.5
@@ -355,17 +283,17 @@ func _weight_multiplier() -> float:
 		_: return 1.0
 
 func _push_amount() -> int:
-	return maxi(0, int(ceil(float(selected_invest) * _weight_multiplier() + float(slip_bonus + scan_bonus))))
+	return maxi(0, int(ceil(float(battle_state.selected_invest) * _weight_multiplier() + float(battle_state.slip_bonus + battle_state.scan_bonus))))
 
 func _momentum_damage() -> int:
-	var damage := selected_invest * 2 + scan_bonus
-	if pebbles > 0:
+	var damage: int = battle_state.selected_invest * 2 + battle_state.scan_bonus
+	if battle_state.pebbles > 0:
 		damage += 2
 	return maxi(1, damage)
 
 func _heat_damage() -> int:
-	var damage := selected_invest + 1
-	var enemy_material := String(enemy.get("material", ""))
+	var damage: int = battle_state.selected_invest + 1
+	var enemy_material := String(battle_state.enemy.get("material", ""))
 	if enemy_material == "油":
 		damage += 1
 	elif enemy_material == "石":
@@ -378,24 +306,24 @@ func _preview_for(card_id: String) -> String:
 	match effect:
 		"knockback":
 			var push := _push_amount()
-			var text := "□=%d → %dマス押す" % [selected_invest, push]
-			if push >= wall_distance:
+			var text := "□=%d → %dマス押す" % [battle_state.selected_invest, push]
+			if push >= battle_state.wall_distance:
 				text += "\n壁衝突：%dダメージ" % (push + 2)
 			else:
-				text += "\n壁まで残り：%d" % maxi(0, wall_distance - push)
+				text += "\n壁まで残り：%d" % maxi(0, battle_state.wall_distance - push)
 			return text
 		"damage":
 			var extra := ""
-			if pebbles > 0:
+			if battle_state.pebbles > 0:
 				extra = " / 小石+2"
-			return "□=%d → %dダメージ%s" % [selected_invest, _momentum_damage(), extra]
+			return "□=%d → %dダメージ%s" % [battle_state.selected_invest, _momentum_damage(), extra]
 		"burn":
-			var burn_add := selected_invest
-			if String(enemy.get("material", "")) == "油":
+			var burn_add: int = battle_state.selected_invest
+			if String(battle_state.enemy.get("material", "")) == "油":
 				burn_add += 1
-			return "□=%d → %dダメージ + 火傷%d" % [selected_invest, _heat_damage(), burn_add]
+			return "□=%d → %dダメージ + 火傷%d" % [battle_state.selected_invest, _heat_damage(), burn_add]
 		"slip":
-			return "□=%d → 滑り+%d\n次の押力式が強くなる" % [selected_invest, selected_invest + 1]
+			return "□=%d → 滑り+%d\n次の押力式が強くなる" % [battle_state.selected_invest, battle_state.selected_invest + 1]
 		"scan":
 			return "0式力 → 1枚引く\n次の力学式+1"
 		"recover":
@@ -434,9 +362,9 @@ func _build_top_hud() -> void:
 	row.offset_bottom = -8
 	row.add_theme_constant_override("separation", 16)
 	top.add_child(row)
-	ui.add_label_nowrap(row, "第%d戦" % [battle_index + 1], 24, gold, 84)
-	ui.add_label_nowrap(row, "ターン %d" % turn, 22, Color(0.92, 0.88, 0.72), 110)
-	ui.add_label_nowrap(row, "山札 %d / 捨札 %d / デッキ %d" % [draw_pile.size(), discard_pile.size(), run_deck.size()], 18, Color(0.82, 0.82, 0.74), 300)
+	ui.add_label_nowrap(row, "第%d戦" % [battle_state.battle_index + 1], 24, gold, 84)
+	ui.add_label_nowrap(row, "ターン %d" % battle_state.turn, 22, Color(0.92, 0.88, 0.72), 110)
+	ui.add_label_nowrap(row, "山札 %d / 捨札 %d / デッキ %d" % [battle_state.draw_pile.size(), battle_state.discard_pile.size(), battle_state.run_deck.size()], 18, Color(0.82, 0.82, 0.74), 300)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
@@ -456,10 +384,10 @@ func _build_left_status_column() -> void:
 	player_box.add_theme_constant_override("separation", 5)
 	player_panel.add_child(player_box)
 	ui.add_label(player_box, "リカ・ノヴァ", 23, gold)
-	ui.add_label(player_box, "HP %d/%d" % [player_hp, player_max_hp], 22)
-	ui.add_label(player_box, "式力  %d / %d" % [formula_power, max_formula_power], 34, Color(1.0, 0.86, 0.36))
-	ui.add_label(player_box, "小石 %d  火傷 %d" % [pebbles, burn], 18, Color(0.9, 0.9, 0.85))
-	ui.add_label(player_box, "滑り+%d  観測+%d" % [slip_bonus, scan_bonus], 18, Color(0.82, 0.88, 0.82))
+	ui.add_label(player_box, "HP %d/%d" % [battle_state.player_hp, battle_state.player_max_hp], 22)
+	ui.add_label(player_box, "式力  %d / %d" % [battle_state.formula_power, battle_state.max_formula_power], 34, Color(1.0, 0.86, 0.36))
+	ui.add_label(player_box, "小石 %d  火傷 %d" % [battle_state.pebbles, battle_state.burn], 18, Color(0.9, 0.9, 0.85))
+	ui.add_label(player_box, "滑り+%d  観測+%d" % [battle_state.slip_bonus, battle_state.scan_bonus], 18, Color(0.82, 0.88, 0.82))
 	var end_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
 	ui.set_box(end_panel, 28, 312, 315, 382)
 	add_child(end_panel)
@@ -487,11 +415,11 @@ func _build_enemy_panel() -> void:
 	enemy_box.offset_bottom = -14
 	enemy_box.add_theme_constant_override("separation", 4)
 	enemy_panel.add_child(enemy_box)
-	ui.add_label(enemy_box, enemy.get("name", "敵"), 25, gold)
-	ui.add_label(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 25)
-	ui.add_label(enemy_box, "重さ：%s  素材：%s" % [enemy.get("weight", "?"), enemy.get("material", "?")], 18)
-	ui.add_label(enemy_box, "壁まで：%d / 初期%d" % [wall_distance, initial_wall_distance], 18)
-	ui.add_label(enemy_box, "攻撃：%d" % int(enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
+	ui.add_label(enemy_box, battle_state.enemy.get("name", "敵"), 25, gold)
+	ui.add_label(enemy_box, "HP %d/%d" % [maxi(0, battle_state.enemy_hp), battle_state.enemy_max_hp], 25)
+	ui.add_label(enemy_box, "重さ：%s  素材：%s" % [battle_state.enemy.get("weight", "?"), battle_state.enemy.get("material", "?")], 18)
+	ui.add_label(enemy_box, "壁まで：%d / 初期%d" % [battle_state.wall_distance, battle_state.initial_wall_distance], 18)
+	ui.add_label(enemy_box, "攻撃：%d" % int(battle_state.enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
 
 func _build_battle_center() -> void:
 	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.82))
@@ -527,14 +455,14 @@ func _build_battle_center() -> void:
 	enemy_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	enemy_box.add_theme_constant_override("separation", 2)
 	enemy_token.add_child(enemy_box)
-	ui.add_label_nowrap(enemy_box, enemy.get("name", "敵"), 17, gold, 150)
+	ui.add_label_nowrap(enemy_box, battle_state.enemy.get("name", "敵"), 17, gold, 150)
 	ui.add_label_nowrap(enemy_box, _enemy_token_icon(), 54, Color(0.55, 0.95, 0.95), 110)
-	ui.add_label_nowrap(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 15, Color(0.92, 0.92, 0.86), 130)
+	ui.add_label_nowrap(enemy_box, "HP %d/%d" % [maxi(0, battle_state.enemy_hp), battle_state.enemy_max_hp], 15, Color(0.92, 0.92, 0.86), 130)
 	ui.add_label(arena, "→", 48, Color(0.95, 0.90, 0.70))
 	var spaces := HBoxContainer.new()
 	spaces.add_theme_constant_override("separation", 6)
 	arena.add_child(spaces)
-	for i in range(initial_wall_distance):
+	for i in range(battle_state.initial_wall_distance):
 		var cell = ui.make_panel(Color(0.05, 0.08, 0.08, 0.74))
 		cell.custom_minimum_size = Vector2(38, 94)
 		spaces.add_child(cell)
@@ -542,13 +470,13 @@ func _build_battle_center() -> void:
 		cell_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 		cell.add_child(cell_box)
 		var symbol := "□"
-		if i >= wall_distance:
+		if i >= battle_state.wall_distance:
 			symbol = "×"
 		ui.add_label_nowrap(cell_box, symbol, 22, Color(0.95, 0.90, 0.70), 20)
 	ui.add_label_nowrap(arena, "壁", 30, gold, 54)
 
 func _enemy_token_icon() -> String:
-	var enemy_id := String(enemy.get("id", ""))
+	var enemy_id := String(battle_state.enemy.get("id", ""))
 	match enemy_id:
 		"puyo":
 			return "●"
@@ -576,8 +504,8 @@ func _build_preview_panel() -> void:
 	prev_box.offset_bottom = -12
 	prev_box.add_theme_constant_override("separation", 4)
 	preview.add_child(prev_box)
-	var c: Dictionary = cards.get(selected_card_id, {})
-	ui.add_label_nowrap(prev_box, "選択中：%s" % c.get("name_jp", selected_card_id), 22, gold, 470)
+	var c: Dictionary = cards.get(battle_state.selected_card_id, {})
+	ui.add_label_nowrap(prev_box, "選択中：%s" % c.get("name_jp", battle_state.selected_card_id), 22, gold, 470)
 	ui.add_label_nowrap(prev_box, "%s" % c.get("formula", ""), 22, Color(0.92, 0.92, 0.86), 470)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -586,16 +514,16 @@ func _build_preview_panel() -> void:
 	for n in range(1, 6):
 		var value := n
 		var txt := str(value)
-		if value == selected_invest:
+		if value == battle_state.selected_invest:
 			txt = "□=" + str(value)
 		var b = ui.add_button(row, txt, func(): _select_invest(value), Vector2(54, 32))
-		b.disabled = value > maxi(1, formula_power)
-	ui.add_label(prev_box, _preview_for(selected_card_id), 17, Color(0.9, 0.9, 0.84))
-	if selected_invest >= 5:
+		b.disabled = value > maxi(1, battle_state.formula_power)
+	ui.add_label(prev_box, _preview_for(battle_state.selected_card_id), 17, Color(0.9, 0.9, 0.84))
+	if battle_state.selected_invest >= 5:
 		ui.add_label(prev_box, "警告：過負荷。リカに1ダメージ。", 15, Color(1.0, 0.65, 0.45))
 
 func _select_invest(value: int) -> void:
-	selected_invest = value
+	battle_state.selected_invest = value
 	_play_sfx("ui_select")
 	show_battle()
 
@@ -620,15 +548,15 @@ func _build_hand_panel() -> void:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 10)
 	scroll.add_child(hbox)
-	if hand_cards.is_empty():
+	if battle_state.hand_cards.is_empty():
 		ui.add_label(hbox, "手札がない。ターン終了で引き直せます。", 20)
 	else:
-		for id in hand_cards:
+		for id in battle_state.hand_cards:
 			_add_hand_card(hbox, String(id))
 
 func _add_hand_card(parent: Node, card_id: String) -> void:
 	var c: Dictionary = cards.get(card_id, {})
-	var is_selected := card_id == selected_card_id
+	var is_selected: bool = card_id == battle_state.selected_card_id
 	var bg := Color(0.93, 0.88, 0.76, 0.98)
 	if is_selected:
 		bg = Color(1.0, 0.94, 0.70, 1.0)
@@ -660,7 +588,7 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 	b.disabled = not _can_pay(card_id)
 
 func _select_card(card_id: String) -> void:
-	selected_card_id = card_id
+	battle_state.selected_card_id = card_id
 	_play_sfx("ui_select")
 	show_battle()
 
@@ -680,12 +608,12 @@ func _build_log_panel() -> void:
 	ui.add_label(box, _last_logs(7), 16, Color(0.86, 0.88, 0.82))
 
 func _last_logs(limit: int = 6) -> String:
-	if battle_log.is_empty():
+	if battle_state.battle_log.is_empty():
 		return "押力式を選び、□に式力を代入しよう。"
-	var start: int = maxi(0, battle_log.size() - limit)
+	var start: int = maxi(0, battle_state.battle_log.size() - limit)
 	var lines: Array = []
-	for i in range(start, battle_log.size()):
-		lines.append(String(battle_log[i]))
+	for i in range(start, battle_state.battle_log.size()):
+		lines.append(String(battle_state.battle_log[i]))
 	return "\n".join(lines)
 
 
@@ -801,21 +729,21 @@ func _shake_battle_center(strength: float = 6.0) -> void:
 # カード効果 / ターン処理
 # -----------------------------------------------------------------------------
 func play_card(card_id: String) -> void:
-	if hand_cards.find(card_id) < 0:
-		battle_log.append("そのカードは手札にない。")
+	if battle_state.hand_cards.find(card_id) < 0:
+		battle_state.battle_log.append("そのカードは手札にない。")
 		show_battle()
 		return
-	selected_card_id = card_id
+	battle_state.selected_card_id = card_id
 	var c: Dictionary = cards.get(card_id, {})
 	var effect := String(c.get("effect", ""))
 	var cost := _card_cost(card_id)
-	if formula_power < cost:
-		battle_log.append("式力が足りない！")
+	if battle_state.formula_power < cost:
+		battle_state.battle_log.append("式力が足りない！")
 		show_battle()
 		return
-	formula_power -= cost
+	battle_state.formula_power -= cost
 	_remove_card_from_hand(card_id)
-	battle_log.append("%s を発動。" % c.get("name_jp", card_id))
+	battle_state.battle_log.append("%s を発動。" % c.get("name_jp", card_id))
 	_play_sfx("card_cast")
 	match effect:
 		"knockback":
@@ -833,121 +761,121 @@ func play_card(card_id: String) -> void:
 		"pebble":
 			_apply_pebble()
 		_:
-			battle_log.append("まだ効果未実装：" + card_id)
+			battle_state.battle_log.append("まだ効果未実装：" + card_id)
 	if cost >= 5 and effect in ["knockback", "damage", "burn", "slip"]:
-		player_hp = maxi(1, player_hp - 1)
-		battle_log.append("過負荷！ リカに1ダメージ。")
+		battle_state.player_hp = maxi(1, battle_state.player_hp - 1)
+		battle_state.battle_log.append("過負荷！ リカに1ダメージ。")
 		pending_fx["overload"] = true
 	_check_after_card()
 
 func _apply_push() -> void:
 	var push := _push_amount()
-	wall_distance = maxi(0, wall_distance - push)
-	battle_log.append("□=%d。%sを%dマス押した！" % [selected_invest, enemy.get("name", "敵"), push])
-	var wall_hit := wall_distance <= 0
+	battle_state.wall_distance = maxi(0, battle_state.wall_distance - push)
+	battle_state.battle_log.append("□=%d。%sを%dマス押した！" % [battle_state.selected_invest, battle_state.enemy.get("name", "敵"), push])
+	var wall_hit: bool = battle_state.wall_distance <= 0
 	var damage := 0
 	if wall_hit:
 		damage = push + 2
-		enemy_hp -= damage
-		battle_log.append("壁衝突！ %dダメージ！" % damage)
+		battle_state.enemy_hp -= damage
+		battle_state.battle_log.append("壁衝突！ %dダメージ！" % damage)
 	pending_fx = {"type":"push", "push":push, "wall_hit":wall_hit, "damage":damage}
-	slip_bonus = 0
-	scan_bonus = 0
+	battle_state.slip_bonus = 0
+	battle_state.scan_bonus = 0
 func _apply_momentum() -> void:
-	var damage := _momentum_damage()
+	var damage: int = _momentum_damage()
 	var used_pebble := false
-	if pebbles > 0:
-		pebbles -= 1
+	if battle_state.pebbles > 0:
+		battle_state.pebbles -= 1
 		used_pebble = true
-	enemy_hp -= damage
+	battle_state.enemy_hp -= damage
 	if used_pebble:
-		battle_log.append("小石を加速！ %dダメージ！" % damage)
+		battle_state.battle_log.append("小石を加速！ %dダメージ！" % damage)
 	else:
-		battle_log.append("勢式直撃！ %dダメージ！" % damage)
+		battle_state.battle_log.append("勢式直撃！ %dダメージ！" % damage)
 	pending_fx = {"type":"damage", "damage":damage}
-	scan_bonus = 0
+	battle_state.scan_bonus = 0
 func _apply_heat() -> void:
-	var damage := _heat_damage()
-	var burn_add := selected_invest
-	if String(enemy.get("material", "")) == "油":
+	var damage: int = _heat_damage()
+	var burn_add: int = battle_state.selected_invest
+	if String(battle_state.enemy.get("material", "")) == "油":
 		burn_add += 1
-		enemy_hp -= 1
-		battle_log.append("油素材に着火しやすい！ 追加1ダメージ。")
-	enemy_hp -= damage
-	burn += burn_add
-	battle_log.append("熱式：%dダメージ、火傷+%d。" % [damage, burn_add])
+		battle_state.enemy_hp -= 1
+		battle_state.battle_log.append("油素材に着火しやすい！ 追加1ダメージ。")
+	battle_state.enemy_hp -= damage
+	battle_state.burn += burn_add
+	battle_state.battle_log.append("熱式：%dダメージ、火傷+%d。" % [damage, burn_add])
 	pending_fx = {"type":"heat", "damage":damage, "burn":burn_add}
 func _apply_recovery() -> void:
-	formula_power = mini(max_formula_power, formula_power + 2)
+	battle_state.formula_power = mini(battle_state.max_formula_power, battle_state.formula_power + 2)
 	_draw_cards(1)
-	battle_log.append("余白回収：式力+2、カードを1枚引いた。")
+	battle_state.battle_log.append("余白回収：式力+2、カードを1枚引いた。")
 	pending_fx = {"type":"recover"}
 func _apply_scan() -> void:
-	scan_bonus += 1
+	battle_state.scan_bonus += 1
 	_draw_cards(1)
-	battle_log.append("質量測定：次の力学式+1、カードを1枚引いた。")
+	battle_state.battle_log.append("質量測定：次の力学式+1、カードを1枚引いた。")
 	pending_fx = {"type":"scan"}
 func _apply_slip() -> void:
-	var bonus := selected_invest + 1
-	slip_bonus += bonus
-	battle_log.append("摩擦式：滑り+%d。次の押力式が伸びる。" % bonus)
+	var bonus: int = battle_state.selected_invest + 1
+	battle_state.slip_bonus += bonus
+	battle_state.battle_log.append("摩擦式：滑り+%d。次の押力式が伸びる。" % bonus)
 	pending_fx = {"type":"slip", "bonus":bonus}
 func _apply_pebble() -> void:
-	pebbles += 2
+	battle_state.pebbles += 2
 	_draw_cards(1)
-	battle_log.append("小石生成：小石+2、カードを1枚引いた。")
+	battle_state.battle_log.append("小石生成：小石+2、カードを1枚引いた。")
 	pending_fx = {"type":"pebble"}
 func _check_after_card() -> void:
-	if enemy_hp <= 0:
+	if battle_state.enemy_hp <= 0:
 		pending_fx["victory_after"] = true
 	show_battle()
 
 func end_turn() -> void:
 	_play_sfx("turn")
-	if burn >= 3:
-		enemy_hp -= 2
-		battle_log.append("火傷で2ダメージ！")
-		if enemy_hp <= 0:
+	if battle_state.burn >= 3:
+		battle_state.enemy_hp -= 2
+		battle_state.battle_log.append("火傷で2ダメージ！")
+		if battle_state.enemy_hp <= 0:
 			show_victory()
 			return
 	_enemy_action()
-	if player_hp <= 0:
+	if battle_state.player_hp <= 0:
 		show_game_over()
 		return
-	turn += 1
-	formula_power = max_formula_power
-	selected_invest = 1
+	battle_state.turn += 1
+	battle_state.formula_power = battle_state.max_formula_power
+	battle_state.selected_invest = 1
 	_discard_hand()
 	_draw_cards(3)
 	show_battle()
 
 func _enemy_action() -> void:
 	_play_sfx("enemy_attack")
-	var enemy_id := String(enemy.get("id", ""))
-	var attack := int(enemy.get("attack", 2))
-	if enemy_id == "graph_golem" and turn % 3 == 0:
+	var enemy_id := String(battle_state.enemy.get("id", ""))
+	var attack := int(battle_state.enemy.get("attack", 2))
+	if enemy_id == "graph_golem" and battle_state.turn % 3 == 0:
 		var heal := 4
-		enemy_hp = mini(enemy_max_hp, enemy_hp + heal)
-		battle_log.append("グラフ・ゴーレムは黒板を修復。HP+%d。" % heal)
+		battle_state.enemy_hp = mini(battle_state.enemy_max_hp, battle_state.enemy_hp + heal)
+		battle_state.battle_log.append("グラフ・ゴーレムは黒板を修復。HP+%d。" % heal)
 		return
 	if enemy_id == "oily_slime":
-		player_hp -= attack
-		battle_log.append("油まみれスライムのぬるぬる体当たり。%dダメージ。" % attack)
-		if burn > 0:
-			burn += 1
-			battle_log.append("場に熱が残る。敵の火傷+1。")
+		battle_state.player_hp -= attack
+		battle_state.battle_log.append("油まみれスライムのぬるぬる体当たり。%dダメージ。" % attack)
+		if battle_state.burn > 0:
+			battle_state.burn += 1
+			battle_state.battle_log.append("場に熱が残る。敵の火傷+1。")
 		return
-	if enemy_id == "goblin" and wall_distance <= 1:
+	if enemy_id == "goblin" and battle_state.wall_distance <= 1:
 		attack += 1
-		battle_log.append("壁際で石ころゴブリンが踏ん張る！")
-	player_hp -= attack
-	battle_log.append("%sの攻撃！ %dダメージ。" % [enemy.get("name", "敵"), attack])
+		battle_state.battle_log.append("壁際で石ころゴブリンが踏ん張る！")
+	battle_state.player_hp -= attack
+	battle_state.battle_log.append("%sの攻撃！ %dダメージ。" % [battle_state.enemy.get("name", "敵"), attack])
 
 # -----------------------------------------------------------------------------
 # 勝利 / 報酬 / 敗北 / クリア
 # -----------------------------------------------------------------------------
 func show_victory() -> void:
-	if battle_index >= battle_order.size() - 1:
+	if battle_state.battle_index >= battle_state.battle_order.size() - 1:
 		show_run_clear()
 	else:
 		show_reward()
@@ -978,7 +906,7 @@ func show_reward() -> void:
 	ui.add_button(box, "スキップして次の戦闘へ", func(): _go_next_battle(), Vector2(300, 46))
 
 func _reward_options() -> Array:
-	match battle_index:
+	match battle_state.battle_index:
 		0:
 			return ["slip_glyph", "pebble_create", "margin_recovery"]
 		1:
@@ -989,10 +917,7 @@ func _reward_options() -> Array:
 			return ["slip_glyph", "pebble_create", "margin_recovery"]
 
 func _next_enemy_name() -> String:
-	var next_index: int = mini(battle_index + 1, battle_order.size() - 1)
-	var next_id := String(battle_order[next_index])
-	var e: Dictionary = enemies.get(next_id, {})
-	return e.get("name", next_id)
+	return battle_state.next_enemy_name(enemies)
 
 func _add_reward_card(parent: Node, card_id: String) -> void:
 	var c: Dictionary = cards.get(card_id, {})
@@ -1019,11 +944,11 @@ func _add_reward_card(parent: Node, card_id: String) -> void:
 
 func choose_reward(card_id: String) -> void:
 	_play_sfx("ui_select")
-	run_deck.append(card_id)
+	battle_state.run_deck.append(card_id)
 	_go_next_battle()
 
 func _go_next_battle() -> void:
-	battle_index += 1
+	battle_state.battle_index += 1
 	start_battle()
 
 func show_game_over() -> void:
@@ -1061,7 +986,7 @@ func show_run_clear() -> void:
 	panel.add_child(box)
 	ui.add_label(box, "第一式、合格！", 46, gold)
 	ui.add_label(box, "黒板の番人を倒した。\nリカは、世界の式をひとつ読めるようになった。", 24)
-	ui.add_label(box, "最終デッキ：%d枚 / 残りHP：%d" % [run_deck.size(), player_hp], 22, Color(0.92, 0.88, 0.72))
+	ui.add_label(box, "最終デッキ：%d枚 / 残りHP：%d" % [battle_state.run_deck.size(), battle_state.player_hp], 22, Color(0.92, 0.88, 0.72))
 	ui.add_label(box, "次は、敵2体同時戦闘・カード強化・式力過負荷の演出を足すとさらに遊べます。", 20)
 	ui.add_button(box, "もう一度", func(): start_new_run(false))
 	ui.add_button(box, "タイトルへ", func(): show_title())
