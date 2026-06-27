@@ -4,6 +4,8 @@ extends Control
 # Godot 4.x / single-scene prototype.
 # v0.5: 発動演出に合わせた暫定効果音を追加。
 
+const UiFactoryScript = preload("res://scripts/ui/UiFactory.gd")
+
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
 var tutorial_lines: Array = []
@@ -53,8 +55,10 @@ var panel_color := Color(0.02, 0.035, 0.035, 0.84)
 var gold := Color(0.92, 0.72, 0.32)
 var parchment := Color(0.97, 0.92, 0.82)
 var dark_ink := Color(0.04, 0.035, 0.03)
+var ui
 
 func _ready() -> void:
+	ui = UiFactoryScript.new(self, panel_color, gold)
 	_load_data()
 	_setup_sfx()
 	show_title()
@@ -87,98 +91,6 @@ func _clear() -> void:
 			continue
 		child.queue_free()
 
-func _full_rect(node: Control) -> void:
-	node.anchor_left = 0.0
-	node.anchor_top = 0.0
-	node.anchor_right = 1.0
-	node.anchor_bottom = 1.0
-	node.offset_left = 0.0
-	node.offset_top = 0.0
-	node.offset_right = 0.0
-	node.offset_bottom = 0.0
-
-func _set_box(control: Control, left: float, top: float, right: float, bottom: float) -> void:
-	control.anchor_left = 0.0
-	control.anchor_top = 0.0
-	control.anchor_right = 0.0
-	control.anchor_bottom = 0.0
-	control.offset_left = left
-	control.offset_top = top
-	control.offset_right = right
-	control.offset_bottom = bottom
-
-func _add_background(path: String, darken: float = 0.22) -> void:
-	var tex_rect := TextureRect.new()
-	_full_rect(tex_rect)
-	tex_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	if ResourceLoader.exists(path):
-		tex_rect.texture = load(path)
-	add_child(tex_rect)
-	if darken > 0.0:
-		var overlay := ColorRect.new()
-		_full_rect(overlay)
-		overlay.color = Color(0.0, 0.0, 0.0, darken)
-		add_child(overlay)
-
-func _make_panel(bg: Color = panel_color, border: bool = true) -> PanelContainer:
-	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = gold
-	if border:
-		style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	panel.add_theme_stylebox_override("panel", style)
-	return panel
-
-func _add_label(parent: Node, text: String, size: int = 22, color: Color = Color.WHITE) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	parent.add_child(label)
-	return label
-
-func _add_label_nowrap(parent: Node, text: String, size: int = 22, color: Color = Color.WHITE, min_width: float = 0.0) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.clip_text = true
-	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	if min_width > 0.0:
-		label.custom_minimum_size = Vector2(min_width, 0)
-	parent.add_child(label)
-	return label
-
-func _add_button(parent: Node, text: String, callback: Callable, min_size: Vector2 = Vector2(220, 52)) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = min_size
-	var font_size := 22
-	if min_size.y <= 32:
-		font_size = 15
-	elif min_size.y <= 40:
-		font_size = 17
-	elif min_size.y <= 46:
-		font_size = 19
-	b.add_theme_font_size_override("font_size", font_size)
-	b.pressed.connect(callback)
-	parent.add_child(b)
-	return b
-
-func _add_texture(parent: Node, path: String, min_size: Vector2 = Vector2(120, 120), stretch: int = TextureRect.STRETCH_KEEP_ASPECT_CENTERED) -> TextureRect:
-	var tr := TextureRect.new()
-	tr.custom_minimum_size = min_size
-	tr.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	tr.stretch_mode = stretch
-	if ResourceLoader.exists(path):
-		tr.texture = load(path)
-	parent.add_child(tr)
-	return tr
-
 # -----------------------------------------------------------------------------
 # 暫定効果音
 # -----------------------------------------------------------------------------
@@ -194,23 +106,23 @@ func _setup_sfx() -> void:
 		"slip", "scan", "recover", "pebble", "overload", "enemy_attack",
 		"victory", "turn"
 	]
-	for name in names:
-		var path := "res://assets/audio/%s.wav" % name
+	for sound_name in names:
+		var path := "res://assets/audio/%s.wav" % sound_name
 		if not ResourceLoader.exists(path):
 			continue
 		var player := AudioStreamPlayer.new()
-		player.name = name
+		player.name = sound_name
 		player.stream = load(path)
 		player.volume_db = -9.0
 		root.add_child(player)
-		sfx_players[name] = player
+		sfx_players[sound_name] = player
 
-func _play_sfx(name: String) -> void:
+func _play_sfx(sound_name: String) -> void:
 	if not sfx_enabled:
 		return
-	if not sfx_players.has(name):
+	if not sfx_players.has(sound_name):
 		return
-	var player: AudioStreamPlayer = sfx_players[name]
+	var player: AudioStreamPlayer = sfx_players[sound_name]
 	if player == null:
 		return
 	player.stop()
@@ -221,9 +133,9 @@ func _play_sfx(name: String) -> void:
 # -----------------------------------------------------------------------------
 func show_title() -> void:
 	_clear()
-	_add_background("res://assets/images/title_screen_mockup.png", 0.05)
-	var menu := _make_panel(Color(0.015, 0.025, 0.03, 0.80))
-	_set_box(menu, 56, 86, 530, 650)
+	ui.add_background("res://assets/images/title_screen_mockup.png", 0.05)
+	var menu = ui.make_panel(Color(0.015, 0.025, 0.03, 0.80))
+	ui.set_box(menu, 56, 86, 530, 650)
 	add_child(menu)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
@@ -233,17 +145,17 @@ func show_title() -> void:
 	box.offset_right = -24
 	box.offset_bottom = -24
 	menu.add_child(box)
-	_add_label(box, "マギア・フィジカ：第一式", 34, gold)
-	_add_label(box, "Magia Physica: First Formula", 18, Color(0.9, 0.82, 0.62))
+	ui.add_label(box, "マギア・フィジカ：第一式", 34, gold)
+	ui.add_label(box, "Magia Physica: First Formula", 18, Color(0.9, 0.82, 0.62))
 	box.add_child(HSeparator.new())
-	_add_button(box, "はじめる", func(): start_new_run(true))
-	_add_button(box, "すぐバトル", func(): start_new_run(false))
-	_add_button(box, "カード図鑑", func(): show_card_book())
-	_add_button(box, "設定", func(): show_settings())
+	ui.add_button(box, "はじめる", func(): start_new_run(true))
+	ui.add_button(box, "すぐバトル", func(): start_new_run(false))
+	ui.add_button(box, "カード図鑑", func(): show_card_book())
+	ui.add_button(box, "設定", func(): show_settings())
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
-	_add_label(box, "Ver. prototype-0.3.2-ui / Godot 4.x", 16, Color(0.75, 0.72, 0.65))
+	ui.add_label(box, "Ver. prototype-0.3.2-ui / Godot 4.x", 16, Color(0.75, 0.72, 0.65))
 
 func start_new_run(with_tutorial: bool) -> void:
 	player_hp = player_max_hp
@@ -258,9 +170,9 @@ func start_new_run(with_tutorial: bool) -> void:
 
 func show_settings() -> void:
 	_clear()
-	_add_background("res://assets/images/key_visual.png", 0.35)
-	var panel := _make_panel()
-	_set_box(panel, 250, 140, 1030, 545)
+	ui.add_background("res://assets/images/key_visual.png", 0.35)
+	var panel = ui.make_panel()
+	ui.set_box(panel, 250, 140, 1030, 545)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 16)
@@ -270,15 +182,15 @@ func show_settings() -> void:
 	box.offset_right = -30
 	box.offset_bottom = -30
 	panel.add_child(box)
-	_add_label(box, "設定", 36, gold)
-	_add_label(box, "v0.3.2では、バトル背景を暗いプレーン画像に差し替え、手札・プレビュー・敵表示の読みやすさを調整しています。音量などはまだ未実装です。", 22)
-	_add_button(box, "タイトルへ", func(): show_title())
+	ui.add_label(box, "設定", 36, gold)
+	ui.add_label(box, "v0.3.2では、バトル背景を暗いプレーン画像に差し替え、手札・プレビュー・敵表示の読みやすさを調整しています。音量などはまだ未実装です。", 22)
+	ui.add_button(box, "タイトルへ", func(): show_title())
 
 func show_card_book() -> void:
 	_clear()
-	_add_background("res://assets/images/card_grid.png", 0.50)
-	var panel := _make_panel()
-	_set_box(panel, 70, 54, 1210, 650)
+	ui.add_background("res://assets/images/card_grid.png", 0.50)
+	var panel = ui.make_panel()
+	ui.set_box(panel, 70, 54, 1210, 650)
 	add_child(panel)
 	var root_box := VBoxContainer.new()
 	root_box.add_theme_constant_override("separation", 12)
@@ -290,11 +202,11 @@ func show_card_book() -> void:
 	panel.add_child(root_box)
 	var header := HBoxContainer.new()
 	root_box.add_child(header)
-	_add_label(header, "カード図鑑", 34, gold)
+	ui.add_label(header, "カード図鑑", 34, gold)
 	var header_spacer := Control.new()
 	header_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(header_spacer)
-	_add_button(header, "戻る", func(): show_title(), Vector2(140, 44))
+	ui.add_button(header, "戻る", func(): show_title(), Vector2(140, 44))
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root_box.add_child(scroll)
@@ -303,7 +215,7 @@ func show_card_book() -> void:
 	scroll.add_child(list)
 	for id in cards.keys():
 		var c: Dictionary = cards[id]
-		var p := _make_panel(Color(0.0, 0.0, 0.0, 0.45))
+		var p = ui.make_panel(Color(0.0, 0.0, 0.0, 0.45))
 		p.custom_minimum_size = Vector2(0, 100)
 		list.add_child(p)
 		var row := HBoxContainer.new()
@@ -314,29 +226,29 @@ func show_card_book() -> void:
 		row.offset_bottom = -10
 		row.add_theme_constant_override("separation", 18)
 		p.add_child(row)
-		_add_label(row, "%s / %s" % [c.get("name_jp", id), c.get("name_en", "")], 26, gold)
-		_add_label(row, "%s\n%s\n%s" % [c.get("formula", ""), c.get("system", ""), c.get("short", "")], 19, Color.WHITE)
+		ui.add_label(row, "%s / %s" % [c.get("name_jp", id), c.get("name_en", "")], 26, gold)
+		ui.add_label(row, "%s\n%s\n%s" % [c.get("formula", ""), c.get("system", ""), c.get("short", "")], 19, Color.WHITE)
 
 func show_dialogue() -> void:
 	_clear()
-	_add_background("res://assets/images/dialogue_mockup.png", 0.10)
-	var top := _make_panel(Color(0.015, 0.025, 0.03, 0.70))
-	_set_box(top, 42, 30, 425, 94)
+	ui.add_background("res://assets/images/dialogue_mockup.png", 0.10)
+	var top = ui.make_panel(Color(0.015, 0.025, 0.03, 0.70))
+	ui.set_box(top, 42, 30, 425, 94)
 	add_child(top)
 	var top_label := MarginContainer.new()
 	top_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	top_label.add_theme_constant_override("margin_left", 18)
 	top_label.add_theme_constant_override("margin_top", 10)
 	top.add_child(top_label)
-	_add_label(top_label, "第一研究室 / First Laboratory", 22, gold)
+	ui.add_label(top_label, "第一研究室 / First Laboratory", 22, gold)
 
 	var line: Dictionary = {}
 	if tutorial_lines.size() > 0:
 		line = tutorial_lines[clampi(tutorial_index, 0, tutorial_lines.size() - 1)]
 	else:
 		line = {"speaker":"カルド先生", "text":"重いものは、動かしにくい。今日はそれだけ覚えればいい。"}
-	var dialog := _make_panel(Color(0.95, 0.89, 0.78, 0.94))
-	_set_box(dialog, 80, 520, 1040, 690)
+	var dialog = ui.make_panel(Color(0.95, 0.89, 0.78, 0.94))
+	ui.set_box(dialog, 80, 520, 1040, 690)
 	add_child(dialog)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -345,15 +257,15 @@ func show_dialogue() -> void:
 	box.offset_right = -24
 	box.offset_bottom = -18
 	dialog.add_child(box)
-	_add_label(box, line.get("speaker", ""), 24, dark_ink)
-	_add_label(box, line.get("text", ""), 29, dark_ink)
+	ui.add_label(box, line.get("speaker", ""), 24, dark_ink)
+	ui.add_label(box, line.get("text", ""), 29, dark_ink)
 	var next_text := "NEXT"
 	if tutorial_index >= tutorial_lines.size() - 1:
 		next_text = "バトルへ"
-	_add_button(box, next_text, func(): _next_dialogue(), Vector2(150, 44))
+	ui.add_button(box, next_text, func(): _next_dialogue(), Vector2(150, 44))
 
-	var mol := _make_panel(Color(0.95, 0.89, 0.78, 0.94))
-	_set_box(mol, 1060, 540, 1240, 690)
+	var mol = ui.make_panel(Color(0.95, 0.89, 0.78, 0.94))
+	ui.set_box(mol, 1060, 540, 1240, 690)
 	add_child(mol)
 	var mol_box := VBoxContainer.new()
 	mol_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -362,8 +274,8 @@ func show_dialogue() -> void:
 	mol_box.offset_right = -14
 	mol_box.offset_bottom = -14
 	mol.add_child(mol_box)
-	_add_label(mol_box, "モル", 20, dark_ink)
-	_add_label(mol_box, "軽いなら\n押せるモル！", 22, dark_ink)
+	ui.add_label(mol_box, "モル", 20, dark_ink)
+	ui.add_label(mol_box, "軽いなら\n押せるモル！", 22, dark_ink)
 
 func _next_dialogue() -> void:
 	if tutorial_index < tutorial_lines.size() - 1:
@@ -453,10 +365,10 @@ func _momentum_damage() -> int:
 
 func _heat_damage() -> int:
 	var damage := selected_invest + 1
-	var material := String(enemy.get("material", ""))
-	if material == "油":
+	var enemy_material := String(enemy.get("material", ""))
+	if enemy_material == "油":
 		damage += 1
-	elif material == "石":
+	elif enemy_material == "石":
 		damage = maxi(1, damage - 1)
 	return damage
 
@@ -500,7 +412,7 @@ func show_battle() -> void:
 	_clear()
 	enemy_token_ref = null
 	battle_center_ref = null
-	_add_background("res://assets/images/battle_plain_bg.png", 0.16)
+	ui.add_background("res://assets/images/battle_plain_bg.png", 0.16)
 	_build_top_hud()
 	_build_left_status_column()
 	_build_enemy_panel()
@@ -511,8 +423,8 @@ func show_battle() -> void:
 	_play_pending_fx()
 
 func _build_top_hud() -> void:
-	var top := _make_panel(Color(0.015, 0.025, 0.03, 0.88))
-	_set_box(top, 24, 16, 1256, 72)
+	var top = ui.make_panel(Color(0.015, 0.025, 0.03, 0.88))
+	ui.set_box(top, 24, 16, 1256, 72)
 	add_child(top)
 	var row := HBoxContainer.new()
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -522,18 +434,18 @@ func _build_top_hud() -> void:
 	row.offset_bottom = -8
 	row.add_theme_constant_override("separation", 16)
 	top.add_child(row)
-	_add_label_nowrap(row, "第%d戦" % [battle_index + 1], 24, gold, 84)
-	_add_label_nowrap(row, "ターン %d" % turn, 22, Color(0.92, 0.88, 0.72), 110)
-	_add_label_nowrap(row, "山札 %d / 捨札 %d / デッキ %d" % [draw_pile.size(), discard_pile.size(), run_deck.size()], 18, Color(0.82, 0.82, 0.74), 300)
+	ui.add_label_nowrap(row, "第%d戦" % [battle_index + 1], 24, gold, 84)
+	ui.add_label_nowrap(row, "ターン %d" % turn, 22, Color(0.92, 0.88, 0.72), 110)
+	ui.add_label_nowrap(row, "山札 %d / 捨札 %d / デッキ %d" % [draw_pile.size(), discard_pile.size(), run_deck.size()], 18, Color(0.82, 0.82, 0.74), 300)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	_add_button(row, "図鑑", func(): show_card_book(), Vector2(92, 42))
-	_add_button(row, "降参", func(): show_game_over(), Vector2(92, 42))
+	ui.add_button(row, "図鑑", func(): show_card_book(), Vector2(92, 42))
+	ui.add_button(row, "降参", func(): show_game_over(), Vector2(92, 42))
 
 func _build_left_status_column() -> void:
-	var player_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
-	_set_box(player_panel, 28, 92, 315, 300)
+	var player_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	ui.set_box(player_panel, 28, 92, 315, 300)
 	add_child(player_panel)
 	var player_box := VBoxContainer.new()
 	player_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -543,13 +455,13 @@ func _build_left_status_column() -> void:
 	player_box.offset_bottom = -14
 	player_box.add_theme_constant_override("separation", 5)
 	player_panel.add_child(player_box)
-	_add_label(player_box, "リカ・ノヴァ", 23, gold)
-	_add_label(player_box, "HP %d/%d" % [player_hp, player_max_hp], 22)
-	_add_label(player_box, "式力  %d / %d" % [formula_power, max_formula_power], 34, Color(1.0, 0.86, 0.36))
-	_add_label(player_box, "小石 %d  火傷 %d" % [pebbles, burn], 18, Color(0.9, 0.9, 0.85))
-	_add_label(player_box, "滑り+%d  観測+%d" % [slip_bonus, scan_bonus], 18, Color(0.82, 0.88, 0.82))
-	var end_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
-	_set_box(end_panel, 28, 312, 315, 382)
+	ui.add_label(player_box, "リカ・ノヴァ", 23, gold)
+	ui.add_label(player_box, "HP %d/%d" % [player_hp, player_max_hp], 22)
+	ui.add_label(player_box, "式力  %d / %d" % [formula_power, max_formula_power], 34, Color(1.0, 0.86, 0.36))
+	ui.add_label(player_box, "小石 %d  火傷 %d" % [pebbles, burn], 18, Color(0.9, 0.9, 0.85))
+	ui.add_label(player_box, "滑り+%d  観測+%d" % [slip_bonus, scan_bonus], 18, Color(0.82, 0.88, 0.82))
+	var end_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	ui.set_box(end_panel, 28, 312, 315, 382)
 	add_child(end_panel)
 	var end_box := VBoxContainer.new()
 	end_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -558,14 +470,14 @@ func _build_left_status_column() -> void:
 	end_box.offset_right = -16
 	end_box.offset_bottom = -10
 	end_panel.add_child(end_box)
-	_add_button(end_box, "ターン終了", func(): end_turn(), Vector2(240, 46))
+	ui.add_button(end_box, "ターン終了", func(): end_turn(), Vector2(240, 46))
 
 func _build_player_panel() -> void:
 	_build_left_status_column()
 
 func _build_enemy_panel() -> void:
-	var enemy_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
-	_set_box(enemy_panel, 910, 92, 1248, 252)
+	var enemy_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	ui.set_box(enemy_panel, 910, 92, 1248, 252)
 	add_child(enemy_panel)
 	var enemy_box := VBoxContainer.new()
 	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -575,15 +487,15 @@ func _build_enemy_panel() -> void:
 	enemy_box.offset_bottom = -14
 	enemy_box.add_theme_constant_override("separation", 4)
 	enemy_panel.add_child(enemy_box)
-	_add_label(enemy_box, enemy.get("name", "敵"), 25, gold)
-	_add_label(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 25)
-	_add_label(enemy_box, "重さ：%s  素材：%s" % [enemy.get("weight", "?"), enemy.get("material", "?")], 18)
-	_add_label(enemy_box, "壁まで：%d / 初期%d" % [wall_distance, initial_wall_distance], 18)
-	_add_label(enemy_box, "攻撃：%d" % int(enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
+	ui.add_label(enemy_box, enemy.get("name", "敵"), 25, gold)
+	ui.add_label(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 25)
+	ui.add_label(enemy_box, "重さ：%s  素材：%s" % [enemy.get("weight", "?"), enemy.get("material", "?")], 18)
+	ui.add_label(enemy_box, "壁まで：%d / 初期%d" % [wall_distance, initial_wall_distance], 18)
+	ui.add_label(enemy_box, "攻撃：%d" % int(enemy.get("attack", 2)), 17, Color(0.88, 0.86, 0.78))
 
 func _build_battle_center() -> void:
-	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.82))
-	_set_box(panel, 326, 90, 898, 382)
+	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.82))
+	ui.set_box(panel, 326, 90, 898, 382)
 	add_child(panel)
 	battle_center_ref = panel
 	var box := VBoxContainer.new()
@@ -594,14 +506,14 @@ func _build_battle_center() -> void:
 	box.offset_bottom = -14
 	box.add_theme_constant_override("separation", 8)
 	panel.add_child(box)
-	_add_label_nowrap(box, "実験場：押す方向 → 壁", 20, gold, 420)
+	ui.add_label_nowrap(box, "実験場：押す方向 → 壁", 20, gold, 420)
 	var arena := HBoxContainer.new()
 	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	arena.alignment = BoxContainer.ALIGNMENT_CENTER
 	arena.add_theme_constant_override("separation", 18)
 	box.add_child(arena)
 
-	var enemy_token := _make_panel(Color(0.08, 0.19, 0.20, 0.88))
+	var enemy_token = ui.make_panel(Color(0.08, 0.19, 0.20, 0.88))
 	enemy_token.custom_minimum_size = Vector2(176, 154)
 	arena.add_child(enemy_token)
 	enemy_token_ref = enemy_token
@@ -615,15 +527,15 @@ func _build_battle_center() -> void:
 	enemy_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	enemy_box.add_theme_constant_override("separation", 2)
 	enemy_token.add_child(enemy_box)
-	_add_label_nowrap(enemy_box, enemy.get("name", "敵"), 17, gold, 150)
-	_add_label_nowrap(enemy_box, _enemy_token_icon(), 54, Color(0.55, 0.95, 0.95), 110)
-	_add_label_nowrap(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 15, Color(0.92, 0.92, 0.86), 130)
-	_add_label(arena, "→", 48, Color(0.95, 0.90, 0.70))
+	ui.add_label_nowrap(enemy_box, enemy.get("name", "敵"), 17, gold, 150)
+	ui.add_label_nowrap(enemy_box, _enemy_token_icon(), 54, Color(0.55, 0.95, 0.95), 110)
+	ui.add_label_nowrap(enemy_box, "HP %d/%d" % [maxi(0, enemy_hp), enemy_max_hp], 15, Color(0.92, 0.92, 0.86), 130)
+	ui.add_label(arena, "→", 48, Color(0.95, 0.90, 0.70))
 	var spaces := HBoxContainer.new()
 	spaces.add_theme_constant_override("separation", 6)
 	arena.add_child(spaces)
 	for i in range(initial_wall_distance):
-		var cell := _make_panel(Color(0.05, 0.08, 0.08, 0.74))
+		var cell = ui.make_panel(Color(0.05, 0.08, 0.08, 0.74))
 		cell.custom_minimum_size = Vector2(38, 94)
 		spaces.add_child(cell)
 		var cell_box := CenterContainer.new()
@@ -632,8 +544,8 @@ func _build_battle_center() -> void:
 		var symbol := "□"
 		if i >= wall_distance:
 			symbol = "×"
-		_add_label_nowrap(cell_box, symbol, 22, Color(0.95, 0.90, 0.70), 20)
-	_add_label_nowrap(arena, "壁", 30, gold, 54)
+		ui.add_label_nowrap(cell_box, symbol, 22, Color(0.95, 0.90, 0.70), 20)
+	ui.add_label_nowrap(arena, "壁", 30, gold, 54)
 
 func _enemy_token_icon() -> String:
 	var enemy_id := String(enemy.get("id", ""))
@@ -653,8 +565,8 @@ func _build_enemy_visual() -> void:
 	_build_battle_center()
 
 func _build_preview_panel() -> void:
-	var preview := _make_panel(Color(0.015, 0.025, 0.03, 0.94))
-	_set_box(preview, 326, 394, 898, 552)
+	var preview = ui.make_panel(Color(0.015, 0.025, 0.03, 0.94))
+	ui.set_box(preview, 326, 394, 898, 552)
 	add_child(preview)
 	var prev_box := VBoxContainer.new()
 	prev_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -665,22 +577,22 @@ func _build_preview_panel() -> void:
 	prev_box.add_theme_constant_override("separation", 4)
 	preview.add_child(prev_box)
 	var c: Dictionary = cards.get(selected_card_id, {})
-	_add_label_nowrap(prev_box, "選択中：%s" % c.get("name_jp", selected_card_id), 22, gold, 470)
-	_add_label_nowrap(prev_box, "%s" % c.get("formula", ""), 22, Color(0.92, 0.92, 0.86), 470)
+	ui.add_label_nowrap(prev_box, "選択中：%s" % c.get("name_jp", selected_card_id), 22, gold, 470)
+	ui.add_label_nowrap(prev_box, "%s" % c.get("formula", ""), 22, Color(0.92, 0.92, 0.86), 470)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	prev_box.add_child(row)
-	_add_label_nowrap(row, "□に代入", 17, Color(0.86, 0.86, 0.80), 90)
+	ui.add_label_nowrap(row, "□に代入", 17, Color(0.86, 0.86, 0.80), 90)
 	for n in range(1, 6):
 		var value := n
 		var txt := str(value)
 		if value == selected_invest:
 			txt = "□=" + str(value)
-		var b := _add_button(row, txt, func(): _select_invest(value), Vector2(54, 32))
+		var b = ui.add_button(row, txt, func(): _select_invest(value), Vector2(54, 32))
 		b.disabled = value > maxi(1, formula_power)
-	_add_label(prev_box, _preview_for(selected_card_id), 17, Color(0.9, 0.9, 0.84))
+	ui.add_label(prev_box, _preview_for(selected_card_id), 17, Color(0.9, 0.9, 0.84))
 	if selected_invest >= 5:
-		_add_label(prev_box, "警告：過負荷。リカに1ダメージ。", 15, Color(1.0, 0.65, 0.45))
+		ui.add_label(prev_box, "警告：過負荷。リカに1ダメージ。", 15, Color(1.0, 0.65, 0.45))
 
 func _select_invest(value: int) -> void:
 	selected_invest = value
@@ -688,8 +600,8 @@ func _select_invest(value: int) -> void:
 	show_battle()
 
 func _build_hand_panel() -> void:
-	var hand_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.86))
-	_set_box(hand_panel, 326, 562, 1248, 708)
+	var hand_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.86))
+	ui.set_box(hand_panel, 326, 562, 1248, 708)
 	add_child(hand_panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -699,7 +611,7 @@ func _build_hand_panel() -> void:
 	box.offset_bottom = -8
 	box.add_theme_constant_override("separation", 6)
 	hand_panel.add_child(box)
-	_add_label(box, "手札：カードを選んで発動", 18, gold)
+	ui.add_label(box, "手札：カードを選んで発動", 18, gold)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
@@ -709,7 +621,7 @@ func _build_hand_panel() -> void:
 	hbox.add_theme_constant_override("separation", 10)
 	scroll.add_child(hbox)
 	if hand_cards.is_empty():
-		_add_label(hbox, "手札がない。ターン終了で引き直せます。", 20)
+		ui.add_label(hbox, "手札がない。ターン終了で引き直せます。", 20)
 	else:
 		for id in hand_cards:
 			_add_hand_card(hbox, String(id))
@@ -720,7 +632,7 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 	var bg := Color(0.93, 0.88, 0.76, 0.98)
 	if is_selected:
 		bg = Color(1.0, 0.94, 0.70, 1.0)
-	var p := _make_panel(bg)
+	var p = ui.make_panel(bg)
 	p.custom_minimum_size = Vector2(246, 112)
 	parent.add_child(p)
 	var row := HBoxContainer.new()
@@ -735,16 +647,16 @@ func _add_hand_card(parent: Node, card_id: String) -> void:
 	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_box.add_theme_constant_override("separation", 0)
 	row.add_child(text_box)
-	_add_label_nowrap(text_box, "%s / %s" % [c.get("name_jp", card_id), c.get("name_en", "")], 16, dark_ink, 140)
-	_add_label_nowrap(text_box, c.get("formula", ""), 17, Color(0.03, 0.22, 0.18), 140)
-	_add_label(text_box, c.get("short", ""), 12, Color(0.05, 0.05, 0.04))
+	ui.add_label_nowrap(text_box, "%s / %s" % [c.get("name_jp", card_id), c.get("name_en", "")], 16, dark_ink, 140)
+	ui.add_label_nowrap(text_box, c.get("formula", ""), 17, Color(0.03, 0.22, 0.18), 140)
+	ui.add_label(text_box, c.get("short", ""), 12, Color(0.05, 0.05, 0.04))
 	var actions := VBoxContainer.new()
 	actions.custom_minimum_size = Vector2(68, 0)
 	actions.add_theme_constant_override("separation", 6)
 	row.add_child(actions)
-	_add_button(actions, "選択", func(): _select_card(card_id), Vector2(64, 31))
+	ui.add_button(actions, "選択", func(): _select_card(card_id), Vector2(64, 31))
 	var cost := _card_cost(card_id)
-	var b := _add_button(actions, "発動%d" % cost, func(): play_card(card_id), Vector2(64, 31))
+	var b = ui.add_button(actions, "発動%d" % cost, func(): play_card(card_id), Vector2(64, 31))
 	b.disabled = not _can_pay(card_id)
 
 func _select_card(card_id: String) -> void:
@@ -753,8 +665,8 @@ func _select_card(card_id: String) -> void:
 	show_battle()
 
 func _build_log_panel() -> void:
-	var log_panel := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
-	_set_box(log_panel, 28, 394, 315, 708)
+	var log_panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	ui.set_box(log_panel, 28, 394, 315, 708)
 	add_child(log_panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -764,8 +676,8 @@ func _build_log_panel() -> void:
 	box.offset_bottom = -12
 	box.add_theme_constant_override("separation", 6)
 	log_panel.add_child(box)
-	_add_label(box, "バトルログ", 21, gold)
-	_add_label(box, _last_logs(7), 16, Color(0.86, 0.88, 0.82))
+	ui.add_label(box, "バトルログ", 21, gold)
+	ui.add_label(box, _last_logs(7), 16, Color(0.86, 0.88, 0.82))
 
 func _last_logs(limit: int = 6) -> String:
 	if battle_log.is_empty():
@@ -848,7 +760,7 @@ func _fx_enemy_hit(text: String, color: Color) -> void:
 
 func _flash_screen(color: Color, duration: float) -> void:
 	var flash := ColorRect.new()
-	_full_rect(flash)
+	ui.full_rect(flash)
 	flash.color = color
 	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(flash)
@@ -1042,9 +954,9 @@ func show_victory() -> void:
 
 func show_reward() -> void:
 	_clear()
-	_add_background("res://assets/images/reward_mockup.png", 0.22)
-	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.86))
-	_set_box(panel, 170, 82, 1110, 640)
+	ui.add_background("res://assets/images/reward_mockup.png", 0.22)
+	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.86))
+	ui.set_box(panel, 170, 82, 1110, 640)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
@@ -1054,16 +966,16 @@ func show_reward() -> void:
 	box.offset_right = -24
 	box.offset_bottom = -18
 	panel.add_child(box)
-	_add_label(box, "勝利", 48, gold)
-	_add_label(box, "戦闘報酬：カードを1枚選ぶ", 26)
-	_add_label(box, "次の敵：%s" % _next_enemy_name(), 20, Color(0.88, 0.86, 0.78))
+	ui.add_label(box, "勝利", 48, gold)
+	ui.add_label(box, "戦闘報酬：カードを1枚選ぶ", 26)
+	ui.add_label(box, "次の敵：%s" % _next_enemy_name(), 20, Color(0.88, 0.86, 0.78))
 	var rewards := HBoxContainer.new()
 	rewards.add_theme_constant_override("separation", 18)
 	rewards.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(rewards)
 	for id in _reward_options():
 		_add_reward_card(rewards, String(id))
-	_add_button(box, "スキップして次の戦闘へ", func(): _go_next_battle(), Vector2(300, 46))
+	ui.add_button(box, "スキップして次の戦闘へ", func(): _go_next_battle(), Vector2(300, 46))
 
 func _reward_options() -> Array:
 	match battle_index:
@@ -1084,7 +996,7 @@ func _next_enemy_name() -> String:
 
 func _add_reward_card(parent: Node, card_id: String) -> void:
 	var c: Dictionary = cards.get(card_id, {})
-	var p := _make_panel(Color(0.93, 0.88, 0.76, 0.96))
+	var p = ui.make_panel(Color(0.93, 0.88, 0.76, 0.96))
 	p.custom_minimum_size = Vector2(275, 335)
 	parent.add_child(p)
 	var box := VBoxContainer.new()
@@ -1095,15 +1007,15 @@ func _add_reward_card(parent: Node, card_id: String) -> void:
 	box.offset_bottom = -14
 	box.add_theme_constant_override("separation", 7)
 	p.add_child(box)
-	_add_label(box, c.get("name_jp", card_id), 30, dark_ink)
-	_add_label(box, c.get("name_en", ""), 16, Color(0.22, 0.18, 0.12))
-	_add_label(box, c.get("formula", ""), 28, Color(0.03, 0.22, 0.18))
-	_add_label(box, c.get("system", ""), 15, Color(0.25, 0.22, 0.18))
-	_add_label(box, c.get("short", ""), 18, Color(0.05, 0.05, 0.04))
+	ui.add_label(box, c.get("name_jp", card_id), 30, dark_ink)
+	ui.add_label(box, c.get("name_en", ""), 16, Color(0.22, 0.18, 0.12))
+	ui.add_label(box, c.get("formula", ""), 28, Color(0.03, 0.22, 0.18))
+	ui.add_label(box, c.get("system", ""), 15, Color(0.25, 0.22, 0.18))
+	ui.add_label(box, c.get("short", ""), 18, Color(0.05, 0.05, 0.04))
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
-	_add_button(box, "選ぶ", func(): choose_reward(card_id), Vector2(220, 44))
+	ui.add_button(box, "選ぶ", func(): choose_reward(card_id), Vector2(220, 44))
 
 func choose_reward(card_id: String) -> void:
 	_play_sfx("ui_select")
@@ -1116,9 +1028,9 @@ func _go_next_battle() -> void:
 
 func show_game_over() -> void:
 	_clear()
-	_add_background("res://assets/images/battle_mockup.png", 0.62)
-	var panel := _make_panel()
-	_set_box(panel, 360, 205, 920, 520)
+	ui.add_background("res://assets/images/battle_mockup.png", 0.62)
+	var panel = ui.make_panel()
+	ui.set_box(panel, 360, 205, 920, 520)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1128,16 +1040,16 @@ func show_game_over() -> void:
 	box.offset_bottom = -26
 	box.add_theme_constant_override("separation", 14)
 	panel.add_child(box)
-	_add_label(box, "実験失敗", 42, gold)
-	_add_label(box, "式がむにゃむにゃした。もう一度、第一式から試そう。", 22)
-	_add_button(box, "最初から", func(): start_new_run(false))
-	_add_button(box, "タイトルへ", func(): show_title())
+	ui.add_label(box, "実験失敗", 42, gold)
+	ui.add_label(box, "式がむにゃむにゃした。もう一度、第一式から試そう。", 22)
+	ui.add_button(box, "最初から", func(): start_new_run(false))
+	ui.add_button(box, "タイトルへ", func(): show_title())
 
 func show_run_clear() -> void:
 	_clear()
-	_add_background("res://assets/images/key_visual.png", 0.25)
-	var panel := _make_panel(Color(0.015, 0.025, 0.03, 0.84))
-	_set_box(panel, 260, 105, 1020, 610)
+	ui.add_background("res://assets/images/key_visual.png", 0.25)
+	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.84))
+	ui.set_box(panel, 260, 105, 1020, 610)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1147,9 +1059,9 @@ func show_run_clear() -> void:
 	box.offset_bottom = -30
 	box.add_theme_constant_override("separation", 14)
 	panel.add_child(box)
-	_add_label(box, "第一式、合格！", 46, gold)
-	_add_label(box, "黒板の番人を倒した。\nリカは、世界の式をひとつ読めるようになった。", 24)
-	_add_label(box, "最終デッキ：%d枚 / 残りHP：%d" % [run_deck.size(), player_hp], 22, Color(0.92, 0.88, 0.72))
-	_add_label(box, "次は、敵2体同時戦闘・カード強化・式力過負荷の演出を足すとさらに遊べます。", 20)
-	_add_button(box, "もう一度", func(): start_new_run(false))
-	_add_button(box, "タイトルへ", func(): show_title())
+	ui.add_label(box, "第一式、合格！", 46, gold)
+	ui.add_label(box, "黒板の番人を倒した。\nリカは、世界の式をひとつ読めるようになった。", 24)
+	ui.add_label(box, "最終デッキ：%d枚 / 残りHP：%d" % [run_deck.size(), player_hp], 22, Color(0.92, 0.88, 0.72))
+	ui.add_label(box, "次は、敵2体同時戦闘・カード強化・式力過負荷の演出を足すとさらに遊べます。", 20)
+	ui.add_button(box, "もう一度", func(): start_new_run(false))
+	ui.add_button(box, "タイトルへ", func(): show_title())
