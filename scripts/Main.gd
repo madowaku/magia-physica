@@ -326,6 +326,7 @@ func show_battle() -> void:
 	_build_hand_panel()
 	_build_log_panel()
 	_play_pending_fx()
+	_play_enemy_intent_fx()
 
 func _build_top_hud() -> void:
 	var top = ui.make_panel(Color(0.015, 0.025, 0.03, 0.88))
@@ -625,6 +626,8 @@ func _play_pending_fx() -> void:
 		"heat":
 			_play_sfx("heat")
 			_fx_enemy_hit("熱 %d / 火傷+%d" % [int(fx.get("damage", 0)), int(fx.get("burn", 0))], Color(1.0, 0.45, 0.22))
+			if _enemy_id() == "oily_slime":
+				_fx_oily_spark()
 			_flash_screen(Color(1.0, 0.35, 0.10, 0.18), 0.34)
 		"slip":
 			_play_sfx("slip")
@@ -638,6 +641,8 @@ func _play_pending_fx() -> void:
 		"pebble":
 			_play_sfx("pebble")
 			_spawn_float_text("小石+2", Vector2(520, 305), Color(0.92, 0.88, 0.72))
+		"enemy_repair":
+			_fx_golem_repair(int(fx.get("heal", 0)))
 		_:
 			pass
 	if bool(fx.get("overload", false)):
@@ -662,12 +667,50 @@ func _fx_push(push: int, wall_hit: bool, damage: int) -> void:
 		tw.set_parallel(true)
 		tw.tween_property(enemy_token_ref, "position:x", start_pos.x, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(enemy_token_ref, "modulate", Color.WHITE, 0.24)
+		if _enemy_id() == "puyo":
+			_fx_puyo_squish()
 	var text := "%dマス押す" % push
 	if wall_hit:
 		text = "壁衝突！ -%d" % damage
 		_flash_screen(Color(1.0, 0.86, 0.25, 0.18), 0.30)
 		_shake_battle_center(8.0)
 	_spawn_float_text(text, Vector2(620, 260), Color(1.0, 0.92, 0.45))
+
+func _play_enemy_intent_fx() -> void:
+	if _enemy_id() == "goblin" and battle_state.wall_distance <= 1:
+		_fx_goblin_brace()
+
+func _enemy_id() -> String:
+	return String(battle_state.enemy.get("id", ""))
+
+func _fx_puyo_squish() -> void:
+	if enemy_token_ref == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(enemy_token_ref, "scale", Vector2(1.16, 0.82), 0.07)
+	tw.tween_property(enemy_token_ref, "scale", Vector2(0.92, 1.12), 0.08)
+	tw.tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _fx_goblin_brace() -> void:
+	if enemy_token_ref == null:
+		return
+	var start_pos := enemy_token_ref.position
+	var tw := create_tween()
+	tw.tween_property(enemy_token_ref, "position:x", start_pos.x - 5.0, 0.04)
+	tw.tween_property(enemy_token_ref, "position:x", start_pos.x + 4.0, 0.04)
+	tw.tween_property(enemy_token_ref, "position:x", start_pos.x, 0.06)
+
+func _fx_oily_spark() -> void:
+	_spawn_float_text("ぱちっ", Vector2(610, 235), Color(1.0, 0.72, 0.28))
+	_spawn_float_text("火花", Vector2(650, 285), Color(1.0, 0.48, 0.18))
+
+func _fx_golem_repair(heal: int) -> void:
+	_play_sfx("scan")
+	var text := "修復"
+	if heal > 0:
+		text = "修復+%d" % heal
+	_spawn_float_text(text, Vector2(590, 245), Color(0.48, 1.0, 0.58))
+	_flash_screen(Color(0.18, 0.85, 0.35, 0.12), 0.26)
 
 func _fx_enemy_hit(text: String, color: Color) -> void:
 	if enemy_token_ref != null:
@@ -776,6 +819,7 @@ func _enemy_action() -> void:
 		var heal := 4
 		battle_state.enemy_hp = mini(battle_state.enemy_max_hp, battle_state.enemy_hp + heal)
 		battle_state.battle_log.append("グラフ・ゴーレムは黒板を修復。HP+%d。" % heal)
+		pending_fx = {"type":"enemy_repair", "heal":heal}
 		return
 	if enemy_id == "oily_slime":
 		battle_state.player_hp -= attack
