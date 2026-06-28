@@ -677,11 +677,13 @@ func _enemy_intent_text() -> String:
 	if enemy_id == "charge_mouse":
 		if battle_state.turn % 3 == 0:
 			return "敵予告：放電%dダメージ" % (attack + 3)
-		return "敵予告：充電しつつ%dダメージ" % attack
+		if battle_state.turn % 3 == 2:
+			return "敵予告：充電中%d / 次は放電注意" % attack
+		return "敵予告：充電中%d / 放電まで2" % attack
 	if enemy_id == "spring_jelly":
 		if battle_state.wall_distance <= 1:
-			return "敵予告：反発攻撃%dダメージ" % (attack + 1)
-		return "敵予告：弾む攻撃%dダメージ" % attack
+			return "敵予告：びよん反撃%dダメージ" % (attack + 1)
+		return "敵予告：反発準備 %dダメージ" % attack
 	if enemy_id == "oily_slime":
 		if battle_state.burn > 0:
 			return "敵予告：体当たり%d + 火傷+1" % attack
@@ -851,7 +853,7 @@ func _play_pending_fx() -> void:
 	fx_controller.play_pending_fx(fx, _enemy_id(), func(): show_victory())
 
 func _play_enemy_intent_fx() -> void:
-	fx_controller.play_enemy_intent_fx(_enemy_id(), battle_state.wall_distance)
+	fx_controller.play_enemy_intent_fx(_enemy_id(), battle_state.wall_distance, battle_state.turn)
 
 func _enemy_id() -> String:
 	var explicit := String(battle_state.enemy.get("id", ""))
@@ -930,13 +932,14 @@ func _enemy_action() -> void:
 	if enemy_id == "charge_mouse":
 		if battle_state.turn % 3 == 0:
 			attack += 3
-			battle_state.battle_log.append("帯電ネズミが放電！")
+			battle_state.battle_log.append("帯電ネズミが放電した！")
 			pending_fx = {"type":"enemy_discharge"}
 		else:
-			battle_state.battle_log.append("帯電ネズミがぱちぱち充電する。")
+			var turns_until_discharge: int = 3 - battle_state.turn % 3
+			battle_state.battle_log.append("帯電ネズミがぱちぱち充電中。放電まで%dターン。" % turns_until_discharge)
 	if enemy_id == "spring_jelly" and battle_state.wall_distance <= 1:
 		attack += 1
-		battle_state.battle_log.append("バネクラゲが壁際で反発した！")
+		battle_state.battle_log.append("バネクラゲが壁際でびよんと反発した！")
 	if enemy_id == "oily_slime":
 		battle_state.player_hp -= attack
 		battle_state.battle_log.append("油まみれスライムのぬるぬる体当たり。%dダメージ。" % attack)
@@ -1059,11 +1062,13 @@ func _reward_reason_text(card_id: String) -> String:
 		"spring_jelly":
 			match card_id:
 				"elastic_scan":
-					return "おすすめ：弾性を読んで押しを伸ばす。"
+					return "おすすめ：反発前に弾性を読める。"
 				"slip_glyph":
 					return "おすすめ：壁際に運びやすい。"
+				"push_formula":
+					return "おすすめ：反発前に壁へ押し込める。"
 				"margin_recovery":
-					return "おすすめ：手札を回して次の実験へ。"
+					return "おすすめ：押す札を探し直せる。"
 		"goblin":
 			match card_id:
 				"magnetic_flip":
@@ -1079,9 +1084,11 @@ func _reward_reason_text(card_id: String) -> String:
 		"charge_mouse":
 			match card_id:
 				"grounding":
-					return "おすすめ：放電に備えて式力を戻す。"
+					return "おすすめ：放電前に立て直せる。"
+				"margin_recovery":
+					return "おすすめ：放電前に手札を回せる。"
 				"heat_rune":
-					return "おすすめ：低HPを早めに削る。"
+					return "おすすめ：放電前に短期決着を狙う。"
 				"pebble_create":
 					return "おすすめ：磁場反転の弾を準備。"
 		"oily_slime":
