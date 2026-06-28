@@ -6,7 +6,7 @@ var player_max_hp: int = 32
 var formula_power: int = 5
 var max_formula_power: int = 5
 
-var battle_order: Array = ["puyo", "goblin", "oily_slime", "graph_golem"]
+var battle_order: Array = ["puyo", "spring_jelly", "goblin", "charge_mouse", "oily_slime", "graph_golem"]
 var battle_index: int = 0
 var enemy: Dictionary = {}
 var enemy_hp: int = 18
@@ -88,7 +88,7 @@ func remove_card_from_hand(card_id: String) -> void:
 func card_cost(card_id: String, cards: Dictionary) -> int:
 	var c: Dictionary = cards.get(card_id, {})
 	var effect := String(c.get("effect", ""))
-	if effect in ["recover", "scan", "pebble"]:
+	if effect in ["recover", "scan", "pebble", "elastic", "ground"]:
 		return int(c.get("base_cost", 0))
 	var min_cost := int(c.get("cost_min", 1))
 	var max_cost := int(c.get("cost_max", 5))
