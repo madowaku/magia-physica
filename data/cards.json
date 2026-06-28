@@ -89,5 +89,44 @@
     "effect": "pebble",
     "base_cost": 0,
     "image": ""
+  },
+  {
+    "id": "elastic_scan",
+    "name_jp": "弾性測定",
+    "name_en": "Elastic Scan",
+    "system": "弾性系・観測式",
+    "formula": "E = 1/2 kx^2",
+    "cost_min": 0,
+    "cost_max": 0,
+    "short": "弾み方を読む。次の押力式+1、カードを1枚引く。",
+    "effect": "elastic",
+    "base_cost": 0,
+    "image": "res://assets/images/cards/card_elastic_scan.png"
+  },
+  {
+    "id": "magnetic_flip",
+    "name_jp": "磁場反転",
+    "name_en": "Magnetic Flip",
+    "system": "電磁系・反転式",
+    "formula": "F = qvB",
+    "cost_min": 1,
+    "cost_max": 5,
+    "short": "小石があれば1個消費して追加ダメージ。",
+    "effect": "magnetic",
+    "base_cost": 1,
+    "image": "res://assets/images/cards/card_magnetic_flip.png"
+  },
+  {
+    "id": "grounding",
+    "name_jp": "接地式",
+    "name_en": "Grounding",
+    "system": "電気系・安定式",
+    "formula": "V = IR",
+    "cost_min": 0,
+    "cost_max": 0,
+    "short": "式力+1。余分な熱を少し逃がす。",
+    "effect": "ground",
+    "base_cost": 0,
+    "image": "res://assets/images/cards/card_grounding.png"
   }
 ]

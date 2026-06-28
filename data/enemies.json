@@ -10,6 +10,16 @@
     "image": "res://assets/enemies/puyo.png"
   },
   {
+    "id": "spring_jelly",
+    "name": "バネクラゲ",
+    "hp": 20,
+    "weight": "軽い",
+    "material": "弾性",
+    "wall_distance": 3,
+    "attack": 2,
+    "image": "res://assets/images/battle/enemies/enemy_spring_jelly_idle.png"
+  },
+  {
     "id": "goblin",
     "name": "石ころゴブリン",
     "hp": 24,
@@ -28,6 +38,16 @@
     "wall_distance": 5,
     "attack": 1,
     "image": "res://assets/enemies/oily_slime.png"
+  },
+  {
+    "id": "charge_mouse",
+    "name": "帯電ネズミ",
+    "hp": 18,
+    "weight": "軽い",
+    "material": "帯電",
+    "wall_distance": 4,
+    "attack": 1,
+    "image": "res://assets/images/battle/enemies/enemy_charge_mouse_idle.png"
   },
   {
     "id": "graph_golem",

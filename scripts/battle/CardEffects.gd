@@ -19,6 +19,12 @@ func apply(card_id: String, cards: Dictionary, battle_state) -> Dictionary:
 			return apply_slip(battle_state)
 		"pebble":
 			return apply_pebble(battle_state)
+		"elastic":
+			return apply_elastic_scan(battle_state)
+		"magnetic":
+			return apply_magnetic_flip(battle_state)
+		"ground":
+			return apply_grounding(battle_state)
 		_:
 			battle_state.battle_log.append("まだ効果未実装：" + card_id)
 			return {}
@@ -112,3 +118,33 @@ func apply_pebble(battle_state) -> Dictionary:
 	battle_state.draw_cards(1)
 	battle_state.battle_log.append("小石生成：小石+2、カードを1枚引いた。")
 	return {"type":"pebble"}
+
+func apply_elastic_scan(battle_state) -> Dictionary:
+	battle_state.scan_bonus += 1
+	battle_state.draw_cards(1)
+	battle_state.battle_log.append("弾性測定：次の押力式+1、カードを1枚引いた。")
+	return {"type":"scan"}
+
+func apply_magnetic_flip(battle_state) -> Dictionary:
+	var damage: int = battle_state.selected_invest + 1 + battle_state.scan_bonus
+	var used_pebble := false
+	if battle_state.pebbles > 0:
+		battle_state.pebbles -= 1
+		damage += 2
+		used_pebble = true
+	battle_state.enemy_hp -= damage
+	if used_pebble:
+		battle_state.battle_log.append("磁場反転：小石を反転加速！ %dダメージ。" % damage)
+	else:
+		battle_state.battle_log.append("磁場反転：%dダメージ。" % damage)
+	battle_state.scan_bonus = 0
+	return {"type":"damage", "damage":damage}
+
+func apply_grounding(battle_state) -> Dictionary:
+	battle_state.formula_power = mini(battle_state.max_formula_power, battle_state.formula_power + 1)
+	if battle_state.burn > 0:
+		battle_state.burn = maxi(0, battle_state.burn - 1)
+		battle_state.battle_log.append("接地式：式力+1、火傷を1逃がした。")
+	else:
+		battle_state.battle_log.append("接地式：式力+1。")
+	return {"type":"recover"}
