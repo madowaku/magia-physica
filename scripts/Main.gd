@@ -7,6 +7,8 @@ extends Control
 const UiFactoryScript = preload("res://scripts/ui/UiFactory.gd")
 const BattleStateScript = preload("res://scripts/battle/BattleState.gd")
 const CardEffectsScript = preload("res://scripts/battle/CardEffects.gd")
+const FxControllerScript = preload("res://scripts/fx/FxController.gd")
+const SfxControllerScript = preload("res://scripts/fx/SfxController.gd")
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -15,11 +17,6 @@ var tutorial_index: int = 0
 
 # v0.4 action FX state. These are rebuilt every show_battle() call.
 var pending_fx: Dictionary = {}
-var enemy_token_ref: Control = null
-var battle_center_ref: Control = null
-
-var sfx_players: Dictionary = {}
-var sfx_enabled: bool = true
 
 var panel_color := Color(0.02, 0.035, 0.035, 0.84)
 var gold := Color(0.92, 0.72, 0.32)
@@ -28,11 +25,15 @@ var dark_ink := Color(0.04, 0.035, 0.03)
 var ui
 var battle_state
 var card_effects
+var fx_controller
+var sfx_controller
 
 func _ready() -> void:
 	ui = UiFactoryScript.new(self, panel_color, gold)
 	battle_state = BattleStateScript.new()
 	card_effects = CardEffectsScript.new()
+	sfx_controller = SfxControllerScript.new(self)
+	fx_controller = FxControllerScript.new(self, ui, sfx_controller)
 	_load_data()
 	_setup_sfx()
 	show_title()
@@ -69,38 +70,10 @@ func _clear() -> void:
 # 暫定効果音
 # -----------------------------------------------------------------------------
 func _setup_sfx() -> void:
-	if has_node("SFXRoot"):
-		return
-	var root := Node.new()
-	root.name = "SFXRoot"
-	root.add_to_group("persistent_audio")
-	add_child(root)
-	var names := [
-		"ui_select", "card_cast", "push", "wall_hit", "hit", "heat",
-		"slip", "scan", "recover", "pebble", "overload", "enemy_attack",
-		"victory", "turn"
-	]
-	for sound_name in names:
-		var path := "res://assets/audio/%s.wav" % sound_name
-		if not ResourceLoader.exists(path):
-			continue
-		var player := AudioStreamPlayer.new()
-		player.name = sound_name
-		player.stream = load(path)
-		player.volume_db = -9.0
-		root.add_child(player)
-		sfx_players[sound_name] = player
+	sfx_controller.setup()
 
 func _play_sfx(sound_name: String) -> void:
-	if not sfx_enabled:
-		return
-	if not sfx_players.has(sound_name):
-		return
-	var player: AudioStreamPlayer = sfx_players[sound_name]
-	if player == null:
-		return
-	player.stop()
-	player.play()
+	sfx_controller.play(sound_name)
 
 # -----------------------------------------------------------------------------
 # タイトル / 図鑑 / 会話
@@ -315,8 +288,7 @@ func _preview_for(card_id: String) -> String:
 # -----------------------------------------------------------------------------
 func show_battle() -> void:
 	_clear()
-	enemy_token_ref = null
-	battle_center_ref = null
+	fx_controller.clear_refs()
 	ui.add_background("res://assets/images/battle_plain_bg.png", 0.16)
 	_build_top_hud()
 	_build_left_status_column()
@@ -403,7 +375,7 @@ func _build_battle_center() -> void:
 	var panel = ui.make_panel(Color(0.015, 0.025, 0.03, 0.82))
 	ui.set_box(panel, 326, 90, 898, 382)
 	add_child(panel)
-	battle_center_ref = panel
+	fx_controller.set_battle_center(panel)
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.offset_left = 18
@@ -422,8 +394,7 @@ func _build_battle_center() -> void:
 	var enemy_token = ui.make_panel(Color(0.08, 0.19, 0.20, 0.88))
 	enemy_token.custom_minimum_size = Vector2(176, 154)
 	arena.add_child(enemy_token)
-	enemy_token_ref = enemy_token
-	enemy_token_ref = enemy_token
+	fx_controller.set_enemy_token(enemy_token)
 	var enemy_box := VBoxContainer.new()
 	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	enemy_box.offset_left = 12
@@ -616,147 +587,13 @@ func _play_pending_fx() -> void:
 		return
 	var fx := pending_fx.duplicate()
 	pending_fx.clear()
-	var fx_type := String(fx.get("type", ""))
-	match fx_type:
-		"push":
-			_fx_push(int(fx.get("push", 0)), bool(fx.get("wall_hit", false)), int(fx.get("damage", 0)))
-		"damage":
-			_play_sfx("hit")
-			_fx_enemy_hit("-%d" % int(fx.get("damage", 0)), Color(1.0, 0.86, 0.45))
-		"heat":
-			_play_sfx("heat")
-			_fx_enemy_hit("熱 %d / 火傷+%d" % [int(fx.get("damage", 0)), int(fx.get("burn", 0))], Color(1.0, 0.45, 0.22))
-			if _enemy_id() == "oily_slime":
-				_fx_oily_spark()
-			_flash_screen(Color(1.0, 0.35, 0.10, 0.18), 0.34)
-		"slip":
-			_play_sfx("slip")
-			_spawn_float_text("滑り+%d" % int(fx.get("bonus", 0)), Vector2(525, 305), Color(0.65, 0.92, 1.0))
-		"scan":
-			_play_sfx("scan")
-			_spawn_float_text("観測+1", Vector2(520, 305), Color(0.82, 1.0, 0.72))
-		"recover":
-			_play_sfx("recover")
-			_spawn_float_text("式力+2", Vector2(180, 340), Color(1.0, 0.92, 0.45))
-		"pebble":
-			_play_sfx("pebble")
-			_spawn_float_text("小石+2", Vector2(520, 305), Color(0.92, 0.88, 0.72))
-		"enemy_repair":
-			_fx_golem_repair(int(fx.get("heal", 0)))
-		_:
-			pass
-	if bool(fx.get("overload", false)):
-		_play_sfx("overload")
-		_flash_screen(Color(1.0, 0.05, 0.05, 0.18), 0.28)
-		_spawn_float_text("過負荷！", Vector2(190, 220), Color(1.0, 0.38, 0.25))
-	if bool(fx.get("victory_after", false)):
-		_play_sfx("victory")
-		get_tree().create_timer(0.75).timeout.connect(func(): show_victory())
-
-func _fx_push(push: int, wall_hit: bool, damage: int) -> void:
-	if wall_hit:
-		_play_sfx("wall_hit")
-	else:
-		_play_sfx("push")
-	if enemy_token_ref != null:
-		var start_pos := enemy_token_ref.position
-		var push_px: float = clampf(float(push) * 16.0, 12.0, 86.0)
-		enemy_token_ref.position.x = start_pos.x - push_px
-		enemy_token_ref.modulate = Color(1.0, 1.0, 1.0, 0.86)
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(enemy_token_ref, "position:x", start_pos.x, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(enemy_token_ref, "modulate", Color.WHITE, 0.24)
-		if _enemy_id() == "puyo":
-			_fx_puyo_squish()
-	var text := "%dマス押す" % push
-	if wall_hit:
-		text = "壁衝突！ -%d" % damage
-		_flash_screen(Color(1.0, 0.86, 0.25, 0.18), 0.30)
-		_shake_battle_center(8.0)
-	_spawn_float_text(text, Vector2(620, 260), Color(1.0, 0.92, 0.45))
+	fx_controller.play_pending_fx(fx, _enemy_id(), func(): show_victory())
 
 func _play_enemy_intent_fx() -> void:
-	if _enemy_id() == "goblin" and battle_state.wall_distance <= 1:
-		_fx_goblin_brace()
+	fx_controller.play_enemy_intent_fx(_enemy_id(), battle_state.wall_distance)
 
 func _enemy_id() -> String:
 	return String(battle_state.enemy.get("id", ""))
-
-func _fx_puyo_squish() -> void:
-	if enemy_token_ref == null:
-		return
-	var tw := create_tween()
-	tw.tween_property(enemy_token_ref, "scale", Vector2(1.16, 0.82), 0.07)
-	tw.tween_property(enemy_token_ref, "scale", Vector2(0.92, 1.12), 0.08)
-	tw.tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func _fx_goblin_brace() -> void:
-	if enemy_token_ref == null:
-		return
-	var start_pos := enemy_token_ref.position
-	var tw := create_tween()
-	tw.tween_property(enemy_token_ref, "position:x", start_pos.x - 5.0, 0.04)
-	tw.tween_property(enemy_token_ref, "position:x", start_pos.x + 4.0, 0.04)
-	tw.tween_property(enemy_token_ref, "position:x", start_pos.x, 0.06)
-
-func _fx_oily_spark() -> void:
-	_spawn_float_text("ぱちっ", Vector2(610, 235), Color(1.0, 0.72, 0.28))
-	_spawn_float_text("火花", Vector2(650, 285), Color(1.0, 0.48, 0.18))
-
-func _fx_golem_repair(heal: int) -> void:
-	_play_sfx("scan")
-	var text := "修復"
-	if heal > 0:
-		text = "修復+%d" % heal
-	_spawn_float_text(text, Vector2(590, 245), Color(0.48, 1.0, 0.58))
-	_flash_screen(Color(0.18, 0.85, 0.35, 0.12), 0.26)
-
-func _fx_enemy_hit(text: String, color: Color) -> void:
-	if enemy_token_ref != null:
-		var tw := create_tween()
-		tw.tween_property(enemy_token_ref, "scale", Vector2(1.08, 1.08), 0.08)
-		tw.tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.16)
-	_spawn_float_text(text, Vector2(575, 265), color)
-
-func _flash_screen(color: Color, duration: float) -> void:
-	var flash := ColorRect.new()
-	ui.full_rect(flash)
-	flash.color = color
-	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(flash)
-	flash.move_to_front()
-	var tw := create_tween()
-	tw.tween_property(flash, "modulate:a", 0.0, duration)
-	tw.tween_callback(flash.queue_free)
-
-func _spawn_float_text(text: String, pos: Vector2, color: Color) -> void:
-	var label := Label.new()
-	label.text = text
-	label.position = pos
-	label.z_index = 100
-	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(label)
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(label, "position:y", pos.y - 38.0, 0.62).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(label, "modulate:a", 0.0, 0.62)
-	tw.chain().tween_callback(label.queue_free)
-
-func _shake_battle_center(strength: float = 6.0) -> void:
-	if battle_center_ref == null:
-		return
-	var start_pos := battle_center_ref.position
-	var tw := create_tween()
-	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(strength, 0), 0.035)
-	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(-strength, 0), 0.05)
-	tw.tween_property(battle_center_ref, "position", start_pos + Vector2(strength * 0.5, 0), 0.04)
-	tw.tween_property(battle_center_ref, "position", start_pos, 0.05)
 
 # -----------------------------------------------------------------------------
 # カード効果 / ターン処理
