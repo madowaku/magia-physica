@@ -59,6 +59,8 @@ func apply_push(battle_state) -> Dictionary:
 	var push := push_amount(battle_state)
 	battle_state.wall_distance = maxi(0, battle_state.wall_distance - push)
 	battle_state.battle_log.append("□=%d。%sを%dマス押した！" % [battle_state.selected_invest, battle_state.enemy.get("name", "敵"), push])
+	if String(battle_state.enemy.get("id", "")) == "spring_jelly" and push > 0:
+		battle_state.battle_log.append("バネクラゲはびよんと反発した。")
 	var wall_hit: bool = battle_state.wall_distance <= 0
 	var damage := 0
 	if wall_hit:

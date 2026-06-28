@@ -86,10 +86,12 @@ func play_pending_fx(fx: Dictionary, enemy_id: String, victory_callback: Callabl
 		sfx.play("victory")
 		host.get_tree().create_timer(0.75).timeout.connect(victory_callback)
 
-func play_enemy_intent_fx(enemy_id: String, wall_distance: int) -> void:
+func play_enemy_intent_fx(enemy_id: String, wall_distance: int, turn: int = 0) -> void:
 	if enemy_id == "goblin" and wall_distance <= 1:
 		_set_enemy_variant_temporarily("brace", 0.22)
 		_fx_goblin_brace()
+	elif enemy_id == "charge_mouse" and turn % 3 == 0:
+		_set_enemy_variant_temporarily("discharge", 0.24)
 
 func _fx_push(push: int, wall_hit: bool, damage: int, enemy_id: String) -> void:
 	if wall_hit:
@@ -108,7 +110,10 @@ func _fx_push(push: int, wall_hit: bool, damage: int, enemy_id: String) -> void:
 		if enemy_id == "puyo":
 			_set_enemy_variant_temporarily("hit", 0.32)
 			_fx_puyo_squish()
-		elif enemy_id == "spring_jelly" or enemy_id == "charge_mouse":
+		elif enemy_id == "spring_jelly":
+			_set_enemy_variant_temporarily("hit", 0.42)
+			_fx_spring_jelly_rebound(start_pos)
+		elif enemy_id == "charge_mouse":
 			_set_enemy_variant_temporarily("hit", 0.32)
 	var text := "%dマス押す" % push
 	if wall_hit:
@@ -132,6 +137,22 @@ func _fx_puyo_squish() -> void:
 	tw.tween_property(enemy_token_ref, "scale", Vector2(1.16, 0.82), 0.07)
 	tw.tween_property(enemy_token_ref, "scale", Vector2(0.92, 1.12), 0.08)
 	tw.tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _fx_spring_jelly_rebound(start_pos: Vector2) -> void:
+	if enemy_token_ref == null:
+		return
+	host.get_tree().create_timer(0.20).timeout.connect(func():
+		if enemy_token_ref == null:
+			return
+		var tw := host.create_tween()
+		tw.tween_property(enemy_token_ref, "scale", Vector2(1.12, 0.88), 0.06)
+		tw.tween_property(enemy_token_ref, "position:x", start_pos.x + 10.0, 0.08)
+		tw.parallel().tween_property(enemy_token_ref, "scale", Vector2(0.92, 1.12), 0.08)
+		tw.tween_property(enemy_token_ref, "position:x", start_pos.x - 4.0, 0.06)
+		tw.parallel().tween_property(enemy_token_ref, "scale", Vector2(1.04, 0.96), 0.06)
+		tw.tween_property(enemy_token_ref, "position", start_pos, 0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(enemy_token_ref, "scale", Vector2.ONE, 0.08)
+	)
 
 func _fx_goblin_brace() -> void:
 	if enemy_token_ref == null:
@@ -158,7 +179,8 @@ func _fx_golem_repair(heal: int) -> void:
 func _fx_charge_mouse_discharge() -> void:
 	_set_enemy_variant_temporarily("discharge", 0.46)
 	_spawn_float_text("放電！", Vector2(610, 245), Color(1.0, 0.92, 0.32))
-	_flash_screen(Color(1.0, 0.88, 0.16, 0.14), 0.22)
+	_spawn_float_text("ぱちぱち", Vector2(650, 285), Color(1.0, 0.82, 0.22))
+	_flash_screen(Color(1.0, 0.88, 0.16, 0.16), 0.24)
 
 func _flash_screen(color: Color, duration: float) -> void:
 	var flash := ColorRect.new()
