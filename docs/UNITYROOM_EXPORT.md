@@ -42,10 +42,12 @@ PowerShell で実行します。
 cd C:\Dev\Projects\magia-physica
 $env:APPDATA='C:\tmp\godot-appdata'
 $env:LOCALAPPDATA='C:\tmp\godot-localappdata'
+New-Item -ItemType Directory -Force -Path build\unityroom | Out-Null
 & 'C:\tmp\godot-4.6.1\Godot_v4.6.1-stable_win64_console.exe' --headless --path 'C:\Dev\Projects\magia-physica' --export-release 'Unityroom Web' 'build/unityroom/index.html'
 ```
 
 Web export templates が無い場合は、Godot 側で export templates をインストールしてから再実行します。
+Godot CLI export は出力先フォルダを自動作成しないため、`build\unityroom` を先に作成します。
 
 ## 4. build/unityroom/ の中身確認
 
@@ -94,3 +96,19 @@ http://localhost:8000/
 - Web export templates が未インストールだと CLI export は失敗します。
 - Godot の終了時に既存のリソース解放警告が出る smoke があります。exit code 0 で smoke が通る限り、現時点ではブロッカー扱いにしません。
 - `APPDATA` / `LOCALAPPDATA` を `C:\tmp` 配下に向ける設定は検証時だけの環境回避です。プロジェクト設定には入れません。
+
+## 8. 実航海チェック記録
+
+2026-06-29 に Godot 4.6.1 portable (`C:\tmp\godot-4.6.1`) と Web export templates `4.6.1.stable` で確認しました。
+
+通過したコマンド:
+
+```powershell
+$env:APPDATA='C:\tmp\godot-appdata'
+$env:LOCALAPPDATA='C:\tmp\godot-localappdata'
+& 'C:\tmp\godot-4.6.1\Godot_v4.6.1-stable_win64_console.exe' --headless --path 'C:\Dev\Projects\magia-physica' --quit
+New-Item -ItemType Directory -Force -Path build\unityroom | Out-Null
+& 'C:\tmp\godot-4.6.1\Godot_v4.6.1-stable_win64_console.exe' --headless --path 'C:\Dev\Projects\magia-physica' --export-release 'Unityroom Web' 'build/unityroom/index.html'
+```
+
+`http://127.0.0.1:8000/` でタイトル表示、バトル開始、カード選択、□ 代入、発動、ターン終了を確認しました。ブラウザ console に致命的な error / warning は出ていません。
