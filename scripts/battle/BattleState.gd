@@ -25,8 +25,10 @@ var selected_card_id: String = "push_formula"
 var base_deck: Array = [
 	"push_formula", "push_formula",
 	"momentum_needle", "momentum_needle",
-	"heat_rune", "mass_scan", "margin_recovery"
+	"margin_recovery", "pebble_create", "heat_rune"
 ]
+var battle_1_opening_hand: Array = ["push_formula", "momentum_needle", "margin_recovery"]
+var battle_1_early_draws: Array = ["pebble_create", "push_formula", "momentum_needle"]
 var run_deck: Array = []
 var draw_pile: Array = []
 var discard_pile: Array = []
@@ -56,11 +58,31 @@ func start_battle(enemies: Dictionary) -> void:
 	wall_distance = int(enemy.get("wall_distance", 3))
 	initial_wall_distance = wall_distance
 	draw_pile = run_deck.duplicate()
-	draw_pile.shuffle()
 	discard_pile.clear()
 	hand_cards.clear()
-	draw_cards(3)
+	if battle_index == 0:
+		_prepare_battle_1_opening_draws()
+	else:
+		draw_pile.shuffle()
+		draw_cards(3)
 	battle_log.append("第%d戦：%s" % [battle_index + 1, enemy.get("name", "敵")])
+
+func _prepare_battle_1_opening_draws() -> void:
+	for card_id in battle_1_opening_hand:
+		var index := draw_pile.find(card_id)
+		if index >= 0:
+			draw_pile.remove_at(index)
+			hand_cards.append(card_id)
+	var early_draws: Array = []
+	for card_id in battle_1_early_draws:
+		var index := draw_pile.find(card_id)
+		if index >= 0:
+			draw_pile.remove_at(index)
+			early_draws.append(card_id)
+	draw_pile.shuffle()
+	for i in range(early_draws.size() - 1, -1, -1):
+		draw_pile.append(early_draws[i])
+	draw_cards(maxi(0, 3 - hand_cards.size()))
 
 func draw_cards(amount: int) -> void:
 	for i in range(amount):
