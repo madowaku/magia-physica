@@ -9,6 +9,7 @@ const BattleStateScript = preload("res://scripts/battle/BattleState.gd")
 const CardEffectsScript = preload("res://scripts/battle/CardEffects.gd")
 const FxControllerScript = preload("res://scripts/fx/FxController.gd")
 const SfxControllerScript = preload("res://scripts/fx/SfxController.gd")
+const UiFontResource = preload("res://assets/fonts/NotoSansCJKjp-Regular.otf")
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -67,16 +68,28 @@ var battle_state
 var card_effects
 var fx_controller
 var sfx_controller
+var ui_font_resource: Font = null
 
 func _ready() -> void:
-	ui = UiFactoryScript.new(self, panel_color, gold)
+	_setup_ui_theme()
+	ui = UiFactoryScript.new(self, panel_color, gold, ui_font_resource)
 	battle_state = BattleStateScript.new()
 	card_effects = CardEffectsScript.new()
 	sfx_controller = SfxControllerScript.new(self)
-	fx_controller = FxControllerScript.new(self, ui, sfx_controller)
+	fx_controller = FxControllerScript.new(self, ui, sfx_controller, ui_font_resource)
 	_load_data()
 	_setup_sfx()
 	show_title()
+
+func _setup_ui_theme() -> void:
+	if UiFontResource == null:
+		push_warning("UI font resource could not be loaded.")
+		return
+	var ui_font: Font = UiFontResource
+	var ui_theme := Theme.new()
+	ui_theme.default_font = ui_font
+	theme = ui_theme
+	ui_font_resource = ui_font
 
 func _load_data() -> void:
 	cards = _load_json_by_id("res://data/cards.json")

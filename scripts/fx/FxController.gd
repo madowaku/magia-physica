@@ -10,11 +10,13 @@ var enemy_sprite_ref: TextureRect = null
 var enemy_sprite_variants: Dictionary = {}
 var battle_center_ref: Control = null
 var formula_panel_ref: Control = null
+var default_font: Font = null
 
-func _init(host_node: Control, ui_factory, sfx_controller) -> void:
+func _init(host_node: Control, ui_factory, sfx_controller, font: Font = null) -> void:
 	host = host_node
 	ui = ui_factory
 	sfx = sfx_controller
+	default_font = font
 
 func clear_refs() -> void:
 	player_sprite_ref = null
@@ -280,6 +282,8 @@ func _spawn_float_text(text: String, pos: Vector2, color: Color) -> void:
 	label.text = text
 	label.position = pos
 	label.z_index = 100
+	if default_font != null:
+		label.add_theme_font_override("font", default_font)
 	label.add_theme_font_size_override("font_size", 26)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
