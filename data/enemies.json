@@ -2,11 +2,11 @@
   {
     "id": "puyo",
     "name": "ぷよ魔",
-    "hp": 18,
+    "hp": 14,
     "weight": "軽い",
     "material": "ぷにぷに",
-    "wall_distance": 3,
-    "attack": 2,
+    "wall_distance": 2,
+    "attack": 1,
     "image": "res://assets/enemies/puyo.png"
   },
   {
