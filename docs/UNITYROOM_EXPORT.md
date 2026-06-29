@@ -94,3 +94,4 @@ http://localhost:8000/
 - Web export templates が未インストールだと CLI export は失敗します。
 - Godot の終了時に既存のリソース解放警告が出る smoke があります。exit code 0 で smoke が通る限り、現時点ではブロッカー扱いにしません。
 - `APPDATA` / `LOCALAPPDATA` を `C:\tmp` 配下に向ける設定は検証時だけの環境回避です。プロジェクト設定には入れません。
+- ブラウザ環境ごとの日本語フォント差を避けるため、UI 用フォントは `assets/fonts/` に同梱します。フォント追加時はライセンスファイルも一緒に管理します。

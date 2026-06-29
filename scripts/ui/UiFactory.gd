@@ -4,11 +4,13 @@ class_name UiFactory
 var root: Control
 var panel_color: Color
 var border_color: Color
+var default_font: Font = null
 
-func _init(root_control: Control, default_panel_color: Color, accent_color: Color) -> void:
+func _init(root_control: Control, default_panel_color: Color, accent_color: Color, font: Font = null) -> void:
 	root = root_control
 	panel_color = default_panel_color
 	border_color = accent_color
+	default_font = font
 
 func full_rect(node: Control) -> void:
 	node.anchor_left = 0.0
@@ -57,6 +59,7 @@ func make_panel(bg: Color = Color(0.02, 0.035, 0.035, 0.84), border: bool = true
 func add_label(parent: Node, text: String, font_size: int = 22, color: Color = Color.WHITE) -> Label:
 	var label := Label.new()
 	label.text = text
+	_apply_font(label)
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -66,6 +69,7 @@ func add_label(parent: Node, text: String, font_size: int = 22, color: Color = C
 func add_label_nowrap(parent: Node, text: String, font_size: int = 22, color: Color = Color.WHITE, min_width: float = 0.0) -> Label:
 	var label := Label.new()
 	label.text = text
+	_apply_font(label)
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -80,6 +84,7 @@ func add_button(parent: Node, text: String, callback: Callable, min_size: Vector
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = min_size
+	_apply_font(button)
 	var font_size := 22
 	if min_size.y <= 32:
 		font_size = 15
@@ -91,6 +96,10 @@ func add_button(parent: Node, text: String, callback: Callable, min_size: Vector
 	button.pressed.connect(callback)
 	parent.add_child(button)
 	return button
+
+func _apply_font(control: Control) -> void:
+	if default_font != null:
+		control.add_theme_font_override("font", default_font)
 
 func add_texture(parent: Node, path: String, min_size: Vector2 = Vector2(120, 120), stretch: TextureRect.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED) -> TextureRect:
 	var texture_rect := TextureRect.new()
