@@ -695,7 +695,7 @@ func _enemy_intent_text() -> String:
 		return "敵予告：充電中%d / 放電まで2" % attack
 	if enemy_id == "spring_jelly":
 		if battle_state.wall_distance <= 1:
-			return "敵予告：びよん反撃%dダメージ" % (attack + 1)
+			return "敵予告：びよん反撃%dダメージ" % (attack + 2)
 		return "敵予告：反発準備 %dダメージ" % attack
 	if enemy_id == "oily_slime":
 		if battle_state.burn > 0:
@@ -951,7 +951,7 @@ func _enemy_action() -> void:
 			var turns_until_discharge: int = 3 - battle_state.turn % 3
 			battle_state.battle_log.append("帯電ネズミがぱちぱち充電中。放電まで%dターン。" % turns_until_discharge)
 	if enemy_id == "spring_jelly" and battle_state.wall_distance <= 1:
-		attack += 1
+		attack += 2
 		battle_state.battle_log.append("バネクラゲが壁際でびよんと反発した！")
 	if enemy_id == "oily_slime":
 		battle_state.player_hp -= attack

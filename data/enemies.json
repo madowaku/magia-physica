@@ -12,11 +12,11 @@
   {
     "id": "spring_jelly",
     "name": "バネクラゲ",
-    "hp": 20,
+    "hp": 26,
     "weight": "軽い",
     "material": "弾性",
-    "wall_distance": 3,
-    "attack": 2,
+    "wall_distance": 2,
+    "attack": 1,
     "image": "res://assets/images/battle/enemies/enemy_spring_jelly_idle.png"
   },
   {

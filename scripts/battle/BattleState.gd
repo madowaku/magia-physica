@@ -29,6 +29,8 @@ var base_deck: Array = [
 ]
 var battle_1_opening_hand: Array = ["push_formula", "momentum_needle", "margin_recovery"]
 var battle_1_early_draws: Array = ["pebble_create", "push_formula", "momentum_needle"]
+var battle_2_opening_priorities: Array = ["elastic_scan", "push_formula", "momentum_needle"]
+var battle_2_early_draws: Array = ["margin_recovery", "pebble_create", "push_formula"]
 var run_deck: Array = []
 var draw_pile: Array = []
 var discard_pile: Array = []
@@ -62,6 +64,8 @@ func start_battle(enemies: Dictionary) -> void:
 	hand_cards.clear()
 	if battle_index == 0:
 		_prepare_battle_1_opening_draws()
+	elif battle_index == 1:
+		_prepare_guided_opening_draws(battle_2_opening_priorities, battle_2_early_draws)
 	else:
 		draw_pile.shuffle()
 		draw_cards(3)
@@ -82,6 +86,25 @@ func _prepare_battle_1_opening_draws() -> void:
 	draw_pile.shuffle()
 	for i in range(early_draws.size() - 1, -1, -1):
 		draw_pile.append(early_draws[i])
+	draw_cards(maxi(0, 3 - hand_cards.size()))
+
+func _prepare_guided_opening_draws(opening_priorities: Array, early_draws: Array) -> void:
+	for card_id in opening_priorities:
+		var card_key := String(card_id)
+		var index := draw_pile.find(card_key)
+		if index >= 0 and hand_cards.size() < 3:
+			draw_pile.remove_at(index)
+			hand_cards.append(card_key)
+	var staged_draws: Array = []
+	for card_id in early_draws:
+		var card_key := String(card_id)
+		var index := draw_pile.find(card_key)
+		if index >= 0:
+			draw_pile.remove_at(index)
+			staged_draws.append(card_key)
+	draw_pile.shuffle()
+	for i in range(staged_draws.size() - 1, -1, -1):
+		draw_pile.append(staged_draws[i])
 	draw_cards(maxi(0, 3 - hand_cards.size()))
 
 func draw_cards(amount: int) -> void:
