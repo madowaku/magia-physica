@@ -380,9 +380,15 @@ func _preview_for(card_id: String) -> String:
 	match effect:
 		"knockback":
 			var push: int = card_effects.push_amount(battle_state)
+			var resonance: bool = card_effects.push_resonates(battle_state)
 			var text := "□=%d → %dマス押す" % [battle_state.selected_invest, push]
 			if push >= battle_state.wall_distance:
-				text += "\n壁衝突：%dダメージ" % (push + 2)
+				var damage := push + 2
+				if resonance:
+					damage += 2
+				text += "\n壁衝突：%dダメージ" % damage
+				if resonance:
+					text += "\n共鳴：□が壁距離と一致！壁衝突ダメージ+2"
 			else:
 				text += "\n壁まで残り：%d" % maxi(0, battle_state.wall_distance - push)
 			return text

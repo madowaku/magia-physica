@@ -40,6 +40,9 @@ func weight_multiplier(battle_state) -> float:
 func push_amount(battle_state) -> int:
 	return maxi(0, int(ceil(float(battle_state.selected_invest) * weight_multiplier(battle_state) + float(battle_state.slip_bonus + battle_state.scan_bonus))))
 
+func push_resonates(battle_state) -> bool:
+	return battle_state.wall_distance > 0 and battle_state.selected_invest == battle_state.wall_distance
+
 func momentum_damage(battle_state) -> int:
 	var damage: int = battle_state.selected_invest * 2 + battle_state.scan_bonus
 	if battle_state.pebbles > 0:
@@ -56,6 +59,7 @@ func heat_damage(battle_state) -> int:
 	return damage
 
 func apply_push(battle_state) -> Dictionary:
+	var resonated := push_resonates(battle_state)
 	var push := push_amount(battle_state)
 	battle_state.wall_distance = maxi(0, battle_state.wall_distance - push)
 	battle_state.battle_log.append("□=%d。%sを%dマス押した！" % [battle_state.selected_invest, battle_state.enemy.get("name", "敵"), push])
@@ -65,11 +69,14 @@ func apply_push(battle_state) -> Dictionary:
 	var damage := 0
 	if wall_hit:
 		damage = push + 2
+		if resonated:
+			damage += 2
+			battle_state.battle_log.append("リカの式が壁までの距離と共鳴した！")
 		battle_state.enemy_hp -= damage
 		battle_state.battle_log.append("壁衝突！ %dダメージ！" % damage)
 	battle_state.slip_bonus = 0
 	battle_state.scan_bonus = 0
-	return {"type":"push", "push":push, "wall_hit":wall_hit, "damage":damage}
+	return {"type":"push", "push":push, "wall_hit":wall_hit, "damage":damage, "resonance":resonated and wall_hit}
 
 func apply_momentum(battle_state) -> Dictionary:
 	var damage: int = momentum_damage(battle_state)
