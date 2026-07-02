@@ -70,6 +70,8 @@ func start_battle(enemies: Dictionary) -> void:
 		draw_pile.shuffle()
 		draw_cards(3)
 	battle_log.append("第%d戦：%s" % [battle_index + 1, enemy.get("name", "敵")])
+	if battle_index == 1:
+		battle_log.append("モル「壁までの残りと□を合わせると、式が共鳴するモル！」")
 
 func _prepare_battle_1_opening_draws() -> void:
 	for card_id in battle_1_opening_hand:
