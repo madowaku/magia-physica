@@ -43,6 +43,11 @@ func push_amount(battle_state) -> int:
 func push_resonates(battle_state) -> bool:
 	return battle_state.wall_distance > 0 and battle_state.selected_invest == battle_state.wall_distance
 
+func push_upgrade_resonance_bonus(battle_state, resonated: bool, wall_hit: bool) -> int:
+	if resonated and wall_hit and battle_state.has_card_upgrade("push_formula"):
+		return 1
+	return 0
+
 func momentum_damage(battle_state) -> int:
 	var damage: int = battle_state.selected_invest * 2 + battle_state.scan_bonus
 	if battle_state.pebbles > 0:
@@ -72,6 +77,10 @@ func apply_push(battle_state) -> Dictionary:
 		if resonated:
 			damage += 2
 			battle_state.battle_log.append("リカの式が壁までの距離と共鳴した！")
+		var upgrade_bonus := push_upgrade_resonance_bonus(battle_state, resonated, wall_hit)
+		if upgrade_bonus > 0:
+			damage += upgrade_bonus
+			battle_state.battle_log.append("押力式+ が共鳴をさらに強めた！ 追加%dダメージ。" % upgrade_bonus)
 		battle_state.enemy_hp -= damage
 		battle_state.battle_log.append("壁衝突！ %dダメージ！" % damage)
 	battle_state.slip_bonus = 0

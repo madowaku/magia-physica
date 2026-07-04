@@ -32,6 +32,7 @@ var battle_1_early_draws: Array = ["pebble_create", "push_formula", "momentum_ne
 var battle_2_opening_priorities: Array = ["elastic_scan", "push_formula", "momentum_needle"]
 var battle_2_early_draws: Array = ["margin_recovery", "pebble_create", "push_formula"]
 var run_deck: Array = []
+var card_upgrades: Dictionary = {}
 var draw_pile: Array = []
 var discard_pile: Array = []
 var hand_cards: Array = []
@@ -41,7 +42,14 @@ func start_new_run() -> void:
 	player_hp = player_max_hp
 	battle_index = 0
 	run_deck = base_deck.duplicate()
+	card_upgrades.clear()
 	battle_log.clear()
+
+func has_card_upgrade(card_id: String) -> bool:
+	return bool(card_upgrades.get(card_id, false))
+
+func add_card_upgrade(card_id: String) -> void:
+	card_upgrades[card_id] = true
 
 func start_battle(enemies: Dictionary) -> void:
 	formula_power = max_formula_power
