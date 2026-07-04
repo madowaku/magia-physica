@@ -1081,13 +1081,13 @@ func _reward_reason_text(card_id: String) -> String:
 		"spring_jelly":
 			match card_id:
 				"elastic_scan":
-					return "おすすめ：反発前に弾性を読める。"
+					return "おすすめ：バネクラゲの弾み方を読み、押力式の共鳴を狙いやすくする。"
 				"slip_glyph":
 					return "おすすめ：壁際に運びやすい。"
 				"push_formula":
-					return "おすすめ：反発前に壁へ押し込める。"
+					return "おすすめ：壁までの距離と□を合わせると共鳴し、壁衝突を強められる。"
 				"margin_recovery":
-					return "おすすめ：押す札を探し直せる。"
+					return "おすすめ：次ターンに□を合わせるための式力を残しやすい。"
 		"goblin":
 			match card_id:
 				"magnetic_flip":
