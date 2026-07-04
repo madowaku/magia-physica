@@ -10,6 +10,7 @@ const CardEffectsScript = preload("res://scripts/battle/CardEffects.gd")
 const FxControllerScript = preload("res://scripts/fx/FxController.gd")
 const SfxControllerScript = preload("res://scripts/fx/SfxController.gd")
 const UiFontResource = preload("res://assets/fonts/NotoSansCJKjp-Regular.otf")
+const PUSH_FORMULA_UPGRADE_REWARD_ID := "upgrade_push_formula"
 
 var cards: Dictionary = {}
 var enemies: Dictionary = {}
@@ -386,9 +387,13 @@ func _preview_for(card_id: String) -> String:
 				var damage := push + 2
 				if resonance:
 					damage += 2
+				var upgrade_bonus: int = card_effects.push_upgrade_resonance_bonus(battle_state, resonance, true)
+				damage += upgrade_bonus
 				text += "\n壁衝突：%dダメージ" % damage
 				if resonance:
 					text += "\n共鳴：□が壁距離と一致！壁衝突ダメージ+2"
+				if upgrade_bonus > 0:
+					text += "\n強化：押力式+ 追加ダメージ+1"
 			else:
 				text += "\n壁まで残り：%d" % maxi(0, battle_state.wall_distance - push)
 			return text
@@ -1007,25 +1012,37 @@ func show_reward() -> void:
 	ui.add_button(box, "スキップして次の戦闘へ", func(): _go_next_battle(), Vector2(300, 46))
 
 func _reward_options() -> Array:
+	var options: Array = []
 	match battle_state.battle_index:
 		0:
-			return ["elastic_scan", "slip_glyph", "margin_recovery"]
+			options = ["elastic_scan", "slip_glyph", "margin_recovery"]
 		1:
-			return ["pebble_create", "magnetic_flip", "mass_scan"]
+			options = [PUSH_FORMULA_UPGRADE_REWARD_ID, "pebble_create", "magnetic_flip", "mass_scan"]
 		2:
-			return ["grounding", "heat_rune", "pebble_create"]
+			options = ["grounding", "heat_rune", "pebble_create"]
 		3:
-			return ["grounding", "magnetic_flip", "margin_recovery"]
+			options = ["grounding", "magnetic_flip", "margin_recovery"]
 		4:
-			return ["slip_glyph", "mass_scan", "margin_recovery"]
+			options = ["slip_glyph", "mass_scan", "margin_recovery"]
 		_:
-			return ["elastic_scan", "pebble_create", "margin_recovery"]
+			options = ["elastic_scan", "pebble_create", "margin_recovery"]
+	return _available_reward_options(options, 3)
+
+func _available_reward_options(options: Array, max_count: int) -> Array:
+	var available: Array = []
+	for id in options:
+		var reward_id := String(id)
+		if _is_card_upgrade_reward(reward_id) and battle_state.has_card_upgrade(_upgrade_reward_card_id(reward_id)):
+			continue
+		available.append(reward_id)
+		if available.size() >= max_count:
+			break
+	return available
 
 func _next_enemy_name() -> String:
 	return battle_state.next_enemy_name(enemies)
 
 func _add_reward_card(parent: Node, card_id: String) -> void:
-	var c: Dictionary = cards.get(card_id, {})
 	var p = ui.make_panel(Color(0.93, 0.88, 0.76, 0.96))
 	p.custom_minimum_size = Vector2(275, 335)
 	parent.add_child(p)
@@ -1037,19 +1054,54 @@ func _add_reward_card(parent: Node, card_id: String) -> void:
 	box.offset_bottom = -14
 	box.add_theme_constant_override("separation", 7)
 	p.add_child(box)
-	ui.add_label(box, c.get("name_jp", card_id), 30, dark_ink)
-	ui.add_label(box, c.get("name_en", ""), 16, Color(0.22, 0.18, 0.12))
-	ui.add_label(box, c.get("formula", ""), 28, Color(0.03, 0.22, 0.18))
-	ui.add_label(box, c.get("system", ""), 15, Color(0.25, 0.22, 0.18))
+	ui.add_label(box, _reward_name_text(card_id), 30, dark_ink)
+	ui.add_label(box, _reward_subtitle_text(card_id), 16, Color(0.22, 0.18, 0.12))
+	ui.add_label(box, _reward_formula_text(card_id), 28, Color(0.03, 0.22, 0.18))
+	ui.add_label(box, _reward_system_text(card_id), 15, Color(0.25, 0.22, 0.18))
 	ui.add_label(box, _reward_tag_text(card_id), 16, Color(0.42, 0.20, 0.08))
-	ui.add_label(box, c.get("short", ""), 18, Color(0.05, 0.05, 0.04))
+	ui.add_label(box, _reward_short_text(card_id), 18, Color(0.05, 0.05, 0.04))
 	ui.add_label(box, _reward_reason_text(card_id), 16, Color(0.03, 0.22, 0.18))
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(spacer)
 	ui.add_button(box, "選ぶ", func(): choose_reward(card_id), Vector2(220, 44))
 
+func _is_card_upgrade_reward(reward_id: String) -> bool:
+	return reward_id == PUSH_FORMULA_UPGRADE_REWARD_ID
+
+func _upgrade_reward_card_id(reward_id: String) -> String:
+	if reward_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "push_formula"
+	return ""
+
+func _reward_name_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "押力式+"
+	return cards.get(card_id, {}).get("name_jp", card_id)
+
+func _reward_subtitle_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "Push Formula+"
+	return cards.get(card_id, {}).get("name_en", "")
+
+func _reward_formula_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "F = m(a + □)+"
+	return cards.get(card_id, {}).get("formula", "")
+
+func _reward_system_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "カード強化・共鳴式"
+	return cards.get(card_id, {}).get("system", "")
+
+func _reward_short_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "共鳴時、壁衝突ダメージさらに+1"
+	return cards.get(card_id, {}).get("short", "")
+
 func _reward_tag_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "タグ：強化 / 押力式"
 	var c: Dictionary = cards.get(card_id, {})
 	match String(c.get("effect", "")):
 		"knockback":
@@ -1076,6 +1128,8 @@ func _reward_tag_text(card_id: String) -> String:
 			return "タグ：実験カード"
 
 func _reward_reason_text(card_id: String) -> String:
+	if card_id == PUSH_FORMULA_UPGRADE_REWARD_ID:
+		return "おすすめ：壁距離と□を合わせる戦い方がさらに強くなる。"
 	var next_id := String(battle_state.battle_order[clampi(battle_state.battle_index + 1, 0, battle_state.battle_order.size() - 1)])
 	match next_id:
 		"spring_jelly":
@@ -1134,7 +1188,10 @@ func _reward_reason_text(card_id: String) -> String:
 
 func choose_reward(card_id: String) -> void:
 	_play_sfx("ui_select")
-	battle_state.run_deck.append(card_id)
+	if _is_card_upgrade_reward(card_id):
+		battle_state.add_card_upgrade(_upgrade_reward_card_id(card_id))
+	else:
+		battle_state.run_deck.append(card_id)
 	_go_next_battle()
 
 func _go_next_battle() -> void:
